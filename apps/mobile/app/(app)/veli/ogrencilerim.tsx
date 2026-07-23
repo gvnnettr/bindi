@@ -256,19 +256,21 @@ function EditStudentModal({
                 onChangeText={setSchoolQ}
                 placeholder={selectedSchool ? selectedSchool.name : 'Okul ara...'}
               />
-              {filtered.map((s) => (
-                <Pressable
-                  key={s.id}
-                  onPress={() => setSelectedSchool(s)}
-                  style={[
-                    modalStyles.schoolItem,
-                    selectedSchool?.id === s.id && modalStyles.schoolItemActive,
-                  ]}
-                >
-                  <Text style={modalStyles.schoolName}>{s.name}</Text>
-                  <Text style={modalStyles.schoolCity}>{s.district}, {s.city}</Text>
-                </Pressable>
-              ))}
+              <View style={modalStyles.schoolList}>
+                {filtered.map((s) => (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => setSelectedSchool(s)}
+                    style={[
+                      modalStyles.schoolRow,
+                      selectedSchool?.id === s.id && { borderColor: colors.primaryDark, backgroundColor: colors.primarySoft },
+                    ]}
+                  >
+                    <Text style={modalStyles.schoolName}>{s.name}</Text>
+                    <Text style={{ fontSize: 11, color: colors.muted, marginTop: 2 }}>{s.district}, {s.city}</Text>
+                  </Pressable>
+                ))}
+              </View>
             </ScrollView>
 
             <Button

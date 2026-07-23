@@ -14,15 +14,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { api, ApiError } from '../../src/api/client';
 import { useAuth, type Role } from '../../src/state/auth';
-import { Button, ErrorBanner, Input } from '../../src/components/ui';
+import { Button, ErrorBanner } from '../../src/components/ui';
 import { colors } from '../../src/theme/colors';
 
-type Mode = 'login' | 'new' | 'existing' | 'reset';
+/**
+ * Yeni unified OTP flow
+ * mode='set-password': mevcut hesap, OTP doğrula + şifre belirle → giriş
+ * mode='register':     yeni kayıt, OTP doğrula → kayıt formuna yönlen
+ */
+type Mode = 'set-password' | 'register';
 
-interface ParentOtpResp {
+interface OtpVerifyResp {
+  verificationToken: string;
+}
+interface SetPasswordResp {
   token: string;
-  parentId: string;
-  name?: string;
+  role: Role;
+  userId: string;
+  name: string;
+  status?: string;
 }
 
 export default function OtpScreen() {
@@ -35,15 +45,15 @@ export default function OtpScreen() {
   const [code, setCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [sending, setSending] = useState(true);
   const [loading, setLoading] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(0);
+  const [secondsLeft, setSecondsLeft] = useState(60);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const wantsPasswordSetup = params.mode === 'new' || params.mode === 'existing';
+  const isProvider = params.role === 'provider';
+  const isSetPassword = params.mode === 'set-password';
 
   useEffect(() => {
-    void requestCode();
+    startCooldown();
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
@@ -63,21 +73,17 @@ export default function OtpScreen() {
     }, 1000);
   }
 
-  async function requestCode() {
+  async function resendCode() {
+    if (secondsLeft > 0) return;
     setError(null);
-    setSending(true);
     try {
-      if (params.role === 'provider') {
-        await api.post('/providers/forgot-password', { phone: params.phone });
-      } else {
-        await api.post('/parents/login/request', { phone: params.phone });
-      }
+      await api.post('/auth/otp/send', {
+        phone: params.phone,
+        role: params.role,
+      });
       startCooldown();
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
-      setError(msg);
-    } finally {
-      setSending(false);
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
     }
   }
 
@@ -86,26 +92,45 @@ export default function OtpScreen() {
       setError('6 haneli kodu gir');
       return;
     }
-    if (wantsPasswordSetup && newPassword && !/^\d{6}$/.test(newPassword)) {
-      setError('Şifre 6 rakamdan oluşmalı');
+    if (isSetPassword && !/^\d{6}$/.test(newPassword)) {
+      setError('6 rakamlı yeni şifre belirle');
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      if (params.role === 'provider') {
-        router.replace({
-          pathname: '/(auth)/sifre-belirle',
-          params: { phone: params.phone, code, flow: 'reset' },
-        });
-      } else {
-        const resp = await api.post<ParentOtpResp>('/parents/login/otp', {
+      // 1) OTP verify → verificationToken al
+      const verified = await api.post<OtpVerifyResp>('/auth/otp/verify', {
+        phone: params.phone,
+        role: params.role,
+        code,
+      });
+
+      if (isSetPassword) {
+        // 2a) Şifre belirle → oto-login
+        const resp = await api.post<SetPasswordResp>('/auth/set-password', {
           phone: params.phone,
-          code,
-          ...(wantsPasswordSetup && newPassword ? { newPassword } : {}),
+          role: params.role,
+          verificationToken: verified.verificationToken,
+          password: newPassword,
         });
-        await setSession('parent', resp.token);
-        router.replace('/(app)/veli');
+        await setSession(resp.role, resp.token);
+        if (resp.role === 'provider' && resp.status === 'pending_approval') {
+          router.replace('/(auth)/servisci-onay-bekleniyor');
+        } else {
+          router.replace(resp.role === 'provider' ? '/(app)/servisci' : '/(app)/veli');
+        }
+      } else {
+        // 2b) Kayıt formuna yönlen (verify token'ı params ile gönder)
+        router.replace({
+          pathname: isProvider
+            ? '/(auth)/servisci-kayit'
+            : '/(auth)/kayit',
+          params: {
+            phone: params.phone,
+            verificationToken: verified.verificationToken,
+          },
+        });
       }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
@@ -114,6 +139,9 @@ export default function OtpScreen() {
       setLoading(false);
     }
   }
+
+  const title = isSetPassword ? 'Kod ile şifre belirle' : 'Doğrulama kodu';
+  const cta = isSetPassword ? 'Şifreyi Kaydet & Giriş' : 'Doğrula & Devam Et';
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -125,7 +153,7 @@ export default function OtpScreen() {
           <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
             <Text style={styles.backText}>←</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Kod Doğrulama</Text>
+          <Text style={styles.headerTitle}>{title}</Text>
           <View style={{ width: 32 }} />
         </View>
 
@@ -149,61 +177,30 @@ export default function OtpScreen() {
 
           <CodeBoxes value={code} onChange={setCode} />
 
-          <Text style={styles.timerText}>
-            {sending
-              ? 'Kod gönderiliyor...'
-              : secondsLeft > 0
-                ? `Kalan süre ${secondsLeft} sn`
-                : 'Süre doldu — yeniden gönder'}
-          </Text>
-
-          {wantsPasswordSetup && (
-            <View style={{ marginTop: 20 }}>
-              <Input
-                label="Yeni Şifre (6 rakam · opsiyonel)"
-                value={newPassword}
-                onChangeText={(v) => setNewPassword(v.replace(/\D/g, '').slice(0, 6))}
-                placeholder="••••••"
-                secureTextEntry
-                keyboardType="number-pad"
-                maxLength={6}
-                hint="Bir daha SMS beklemeden şifreyle girmek istersen doldur."
-              />
+          {isSetPassword && (
+            <View style={styles.pinBox}>
+              <Text style={styles.pinLabel}>Yeni 6 rakamlı şifre</Text>
+              <PinBoxes value={newPassword} onChange={setNewPassword} />
+              <Text style={styles.pinHint}>Bu şifreyle sonraki girişlerinde hemen içeri girersin.</Text>
             </View>
           )}
 
-          <Pressable
+          <Button
+            label={loading ? 'Doğrulanıyor...' : cta}
             onPress={submit}
-            disabled={loading || code.length !== 6}
-            style={({ pressed }) => [
-              styles.primaryCta,
-              (loading || code.length !== 6) && styles.primaryCtaDisabled,
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            <Text style={styles.primaryCtaText}>
-              {params.role === 'provider' ? 'Devam · Şifre Belirle' : 'Giriş Yap'}
-            </Text>
-            <Text style={styles.primaryCtaArrow}>→</Text>
-          </Pressable>
+            disabled={loading || code.length !== 6 || (isSetPassword && newPassword.length !== 6)}
+            style={{ marginTop: 16 }}
+          />
 
-          <Pressable
-            onPress={requestCode}
-            disabled={secondsLeft > 0 || sending}
-            style={styles.resend}
-            hitSlop={8}
-          >
-            <Text
-              style={[
-                styles.resendText,
-                (secondsLeft > 0 || sending) && styles.resendDisabled,
-              ]}
-            >
-              {secondsLeft > 0
-                ? `Kodu tekrar gönder (${secondsLeft} sn)`
-                : 'Kodu tekrar gönder'}
-            </Text>
-          </Pressable>
+          <View style={styles.resend}>
+            {secondsLeft > 0 ? (
+              <Text style={styles.resendText}>Yeni kod için {secondsLeft}s bekle</Text>
+            ) : (
+              <Pressable onPress={resendCode} hitSlop={8}>
+                <Text style={styles.resendLink}>Kodu tekrar gönder</Text>
+              </Pressable>
+            )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -212,160 +209,106 @@ export default function OtpScreen() {
 
 function CodeBoxes({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const inputRef = useRef<TextInput>(null);
-  const digits = value.padEnd(6, ' ').split('').slice(0, 6);
-
+  const boxes = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
   return (
-    <Pressable onPress={() => inputRef.current?.focus()} style={{ width: '100%' }}>
-      <View style={boxStyles.row}>
-        {digits.map((d, i) => (
-          <View
-            key={i}
-            style={[boxStyles.box, value.length === i && boxStyles.boxActive]}
-          >
-            <Text style={boxStyles.digit}>{d.trim()}</Text>
+    <Pressable onPress={() => inputRef.current?.focus()} style={{ alignSelf: 'stretch' }}>
+      <View style={styles.codeRow}>
+        {boxes.map((c, i) => (
+          <View key={i} style={[styles.codeBox, c && styles.codeBoxFilled]}>
+            <Text style={styles.codeText}>{c}</Text>
           </View>
         ))}
       </View>
       <TextInput
         ref={inputRef}
+        style={styles.hiddenInput}
         value={value}
         onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, 6))}
         keyboardType="number-pad"
         maxLength={6}
         autoFocus
-        style={boxStyles.hidden}
       />
     </Pressable>
   );
 }
 
-const boxStyles = StyleSheet.create({
-  row: {
+function PinBoxes({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const inputRef = useRef<TextInput>(null);
+  const boxes = Array.from({ length: 6 }, (_, i) => (value[i] ? '•' : ''));
+  return (
+    <Pressable onPress={() => inputRef.current?.focus()} style={{ alignSelf: 'stretch' }}>
+      <View style={styles.codeRow}>
+        {boxes.map((c, i) => (
+          <View key={i} style={[styles.codeBox, c && styles.codeBoxFilled]}>
+            <Text style={styles.codeText}>{c}</Text>
+          </View>
+        ))}
+      </View>
+      <TextInput
+        ref={inputRef}
+        style={styles.hiddenInput}
+        value={value}
+        onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, 6))}
+        keyboardType="number-pad"
+        maxLength={6}
+        secureTextEntry
+      />
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bg },
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginTop: 20,
-  },
-  box: {
-    flex: 1,
-    height: 60,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    backgroundColor: colors.card,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+  },
+  back: { padding: 4 },
+  backText: { fontSize: 24, color: colors.dark },
+  headerTitle: { fontSize: 15, fontWeight: '700', color: colors.dark },
+  body: {
+    padding: 24,
+    alignItems: 'center',
+    paddingBottom: 40,
+  },
+  iconBadge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.primarySoft,
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  boxActive: {
-    borderColor: colors.primary,
+  title: { fontSize: 22, fontWeight: '800', color: colors.dark, marginBottom: 6 },
+  sub: { fontSize: 13, color: colors.muted, textAlign: 'center', lineHeight: 20 },
+  phone: { color: colors.dark, fontWeight: '700' },
+  errorWrap: { alignSelf: 'stretch', marginTop: 16 },
+  codeRow: { flexDirection: 'row', gap: 8, marginTop: 16, justifyContent: 'center' },
+  codeBox: {
+    width: 44,
+    height: 54,
     borderWidth: 2,
+    borderColor: colors.border,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.card,
   },
-  digit: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: colors.dark,
-  },
-  hidden: {
+  codeBoxFilled: { borderColor: colors.primaryDark, backgroundColor: colors.primarySoft },
+  codeText: { fontSize: 22, fontWeight: '800', color: colors.dark },
+  hiddenInput: {
     position: 'absolute',
     opacity: 0,
     width: 1,
     height: 1,
   },
-});
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.card },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  back: { padding: 6, width: 32 },
-  backText: { fontSize: 24, color: colors.dark },
-  headerTitle: { fontSize: 15, fontWeight: '800', color: colors.dark, letterSpacing: -0.2 },
-  body: { padding: 24, flexGrow: 1, alignItems: 'center' },
-  iconBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: '#FEF3C7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(245,179,1,0.25)',
-    marginTop: 12,
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: colors.dark,
-    letterSpacing: -0.4,
-  },
-  sub: {
-    fontSize: 13,
-    color: colors.muted,
-    marginTop: 8,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  phone: { color: colors.dark, fontWeight: '700' },
-  errorWrap: { width: '100%', marginTop: 8 },
-  timerText: {
-    fontSize: 11,
-    color: colors.muted,
-    marginTop: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  primaryCta: {
-    marginTop: 24,
-    width: '100%',
-    backgroundColor: colors.primary,
-    paddingVertical: 15,
-    borderRadius: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    shadowColor: colors.primary,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
-  },
-  primaryCtaDisabled: {
-    backgroundColor: colors.borderStrong,
-    shadowOpacity: 0,
-  },
-  primaryCtaText: {
-    color: colors.dark,
-    fontWeight: '800',
-    fontSize: 15,
-  },
-  primaryCtaArrow: {
-    color: colors.dark,
-    fontSize: 16,
-    fontWeight: '800',
-  },
+  pinBox: { marginTop: 24, alignSelf: 'stretch' },
+  pinLabel: { fontSize: 13, fontWeight: '700', color: colors.dark, textAlign: 'center' },
+  pinHint: { fontSize: 11, color: colors.muted, textAlign: 'center', marginTop: 8 },
   resend: { marginTop: 20 },
-  resendText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.blue,
-    textDecorationLine: 'underline',
-  },
-  resendDisabled: {
-    color: colors.muted,
-    textDecorationLine: 'none',
-  },
+  resendText: { fontSize: 12, color: colors.muted },
+  resendLink: { fontSize: 13, color: colors.blue, fontWeight: '700' },
 });

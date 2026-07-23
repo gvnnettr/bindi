@@ -23,6 +23,7 @@ import { DriversModule } from './modules/drivers/drivers.module';
 import { PushModule } from './modules/push/push.module';
 import { TripsModule } from './modules/trips/trips.module';
 import { CitiesModule } from './modules/cities/cities.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { CitiesModule } from './modules/cities/cities.module';
     PushModule,
     TripsModule,
     CitiesModule,
+    AuthModule,
   ],
 })
 export class AppModule {}

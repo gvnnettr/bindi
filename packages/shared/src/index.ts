@@ -35,6 +35,7 @@ export const OTP_PURPOSE = {
   PROVIDER_REGISTER: 'provider_register',
   PROVIDER_LOGIN: 'provider_login',
   PROVIDER_FORGOT: 'provider_forgot_password',
+  AUTH_PHONE_VERIFY: 'auth_phone_verify', // Unified phone-first auth (veli+servisçi)
 } as const;
 export type OtpPurpose = (typeof OTP_PURPOSE)[keyof typeof OTP_PURPOSE];
 
