@@ -12,6 +12,7 @@ import { OffersProviderController } from './offers.provider.controller';
 import { OffersPublicController } from './offers.public.controller';
 import { ProvidersModule } from '../providers/providers.module';
 import { EnrollmentsModule } from '../enrollments/enrollments.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { EnrollmentsModule } from '../enrollments/enrollments.module';
     }),
     ProvidersModule,
     EnrollmentsModule,
+    SettingsModule,
   ],
   controllers: [OffersProviderController, OffersPublicController],
   providers: [OffersService],

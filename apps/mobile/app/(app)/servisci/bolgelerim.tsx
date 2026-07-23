@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,26 +9,37 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
   ActivityIndicator,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import MapView, { Marker, Circle, PROVIDER_DEFAULT, Region } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { api, ApiError } from '../../../src/api/client';
 import { useAuth } from '../../../src/state/auth';
 import { ErrorBanner, Input } from '../../../src/components/ui';
 import { colors } from '../../../src/theme/colors';
 
-interface Region {
+interface RegionItem {
   id: string;
   city: string;
   district: string;
+  latitude: number | null;
+  longitude: number | null;
+  radiusKm: number | null;
+  label: string | null;
 }
 
-export default function BolgelerimScreen() {
+const DEFAULT_REGION = {
+  latitude: 40.9861,
+  longitude: 37.8788,
+  latitudeDelta: 0.1,
+  longitudeDelta: 0.1,
+};
+
+export default function KonumScreen() {
   const { token } = useAuth();
-  const [regions, setRegions] = useState<Region[]>([]);
-  const [enabledCities, setEnabledCities] = useState<string[]>([]);
+  const [regions, setRegions] = useState<RegionItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -36,12 +47,8 @@ export default function BolgelerimScreen() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [r, cities] = await Promise.all([
-        api.get<Region[]>('/me/regions', token),
-        api.get<string[]>('/cities/public'),
-      ]);
+      const r = await api.get<RegionItem[]>('/me/regions', token);
       setRegions(r);
-      setEnabledCities(cities);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
@@ -65,6 +72,10 @@ export default function BolgelerimScreen() {
     }
   }
 
+  // Sadece location-based bölgeler
+  const locationRegions = regions.filter((r) => r.latitude != null && r.longitude != null && r.radiusKm != null);
+  const legacyRegions = regions.filter((r) => r.latitude == null || r.longitude == null || r.radiusKm == null);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -72,8 +83,8 @@ export default function BolgelerimScreen() {
           <Text style={styles.back}>‹</Text>
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Hizmet Bölgelerim</Text>
-          <Text style={styles.sub}>{regions.length} il/ilçe · yeni talepler bu bölgelerde bildirilir</Text>
+          <Text style={styles.title}>Konum</Text>
+          <Text style={styles.sub}>Hizmet çemberin — bu alandaki talepler bildirim olarak gelir</Text>
         </View>
         <Pressable
           onPress={() => setModalOpen(true)}
@@ -90,47 +101,89 @@ export default function BolgelerimScreen() {
       >
         <ErrorBanner message={error} />
 
-        {regions.length === 0 ? (
+        {locationRegions.length === 0 && legacyRegions.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyIcon}>📍</Text>
-            <Text style={styles.emptyTitle}>Henüz bölge eklemedin</Text>
+            <Text style={styles.emptyTitle}>Henüz konum eklemedin</Text>
             <Text style={styles.emptySub}>
-              Hangi il/ilçelerde hizmet vermek istediğini seç. Sadece bu bölgelerdeki talepleri görür ve teklif verebilirsin.
+              Hizmet çemberini haritada belirle. İçindeki tüm veli talepleri sana bildirilir.
             </Text>
-            <Pressable
-              onPress={() => setModalOpen(true)}
-              style={styles.emptyCta}
-            >
-              <Text style={styles.emptyCtaText}>İlk Bölgeni Ekle</Text>
+            <Pressable onPress={() => setModalOpen(true)} style={styles.emptyCta}>
+              <Text style={styles.emptyCtaText}>İlk Konumumu Ekle</Text>
             </Pressable>
           </View>
         ) : (
-          <View style={styles.list}>
-            {regions.map((r) => (
-              <View key={r.id} style={styles.item}>
-                <View style={styles.iconWrap}>
-                  <Text style={styles.iconText}>📍</Text>
+          <>
+            {locationRegions.map((r) => (
+              <View key={r.id} style={styles.regionCard}>
+                <View style={styles.regionMap}>
+                  <MapView
+                    provider={PROVIDER_DEFAULT}
+                    style={StyleSheet.absoluteFillObject}
+                    initialRegion={{
+                      latitude: r.latitude!,
+                      longitude: r.longitude!,
+                      latitudeDelta: (r.radiusKm! * 2) / 111,
+                      longitudeDelta: (r.radiusKm! * 2) / 111,
+                    }}
+                    pointerEvents="none"
+                    showsCompass={false}
+                  >
+                    <Marker coordinate={{ latitude: r.latitude!, longitude: r.longitude! }} pinColor={colors.primary} />
+                    <Circle
+                      center={{ latitude: r.latitude!, longitude: r.longitude! }}
+                      radius={r.radiusKm! * 1000}
+                      fillColor="rgba(255,199,44,0.15)"
+                      strokeColor={colors.primaryDark}
+                      strokeWidth={2}
+                    />
+                  </MapView>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.itemTitle}>{r.district}</Text>
-                  <Text style={styles.itemSub}>{r.city}</Text>
+                <View style={styles.regionBody}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.regionTitle}>{r.label ?? 'İşaretsiz konum'}</Text>
+                    <Text style={styles.regionSub}>{r.radiusKm} km yarıçap</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => removeRegion(r.id, r.label ?? 'Konum')}
+                    hitSlop={8}
+                    style={styles.removeBtn}
+                  >
+                    <Text style={styles.removeText}>✕</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  onPress={() => removeRegion(r.id, `${r.district}, ${r.city}`)}
-                  hitSlop={8}
-                  style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </Pressable>
               </View>
             ))}
-          </View>
+
+            {legacyRegions.length > 0 && (
+              <>
+                <Text style={styles.sectionHint}>ESKİ İL/İLÇE BÖLGELERİ</Text>
+                {legacyRegions.map((r) => (
+                  <View key={r.id} style={styles.legacyRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.legacyTitle}>{r.district}</Text>
+                      <Text style={styles.legacySub}>{r.city}</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => removeRegion(r.id, `${r.district}, ${r.city}`)}
+                      hitSlop={8}
+                      style={styles.removeBtn}
+                    >
+                      <Text style={styles.removeText}>✕</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                <Text style={styles.migrateHint}>
+                  💡 İpucu: Yeni konum-yarıçap sistemi daha esnek. Eski bölgeleri silip konum ekleyebilirsin.
+                </Text>
+              </>
+            )}
+          </>
         )}
       </ScrollView>
 
-      <AddRegionModal
+      <AddLocationModal
         visible={modalOpen}
-        enabledCities={enabledCities}
         onClose={() => setModalOpen(false)}
         onDone={async () => {
           setModalOpen(false);
@@ -141,34 +194,64 @@ export default function BolgelerimScreen() {
   );
 }
 
-function AddRegionModal({
+function AddLocationModal({
   visible,
-  enabledCities,
   onClose,
   onDone,
 }: {
   visible: boolean;
-  enabledCities: string[];
   onClose: () => void;
   onDone: () => void;
 }) {
   const { token } = useAuth();
-  const [city, setCity] = useState('');
-  const [district, setDistrict] = useState('');
+  const [label, setLabel] = useState('');
+  const [radiusKm, setRadiusKm] = useState(10);
+  const [center, setCenter] = useState<{ latitude: number; longitude: number }>({
+    latitude: DEFAULT_REGION.latitude,
+    longitude: DEFAULT_REGION.longitude,
+  });
+  const [mapRegion, setMapRegion] = useState<Region>(DEFAULT_REGION);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
+
+  async function useMyLocation() {
+    setError(null);
+    setLocating(true);
+    try {
+      const perm = await Location.requestForegroundPermissionsAsync();
+      if (!perm.granted) {
+        setError('Konum izni verilmedi.');
+        return;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const p = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setCenter(p);
+      setMapRegion({
+        ...p,
+        latitudeDelta: (radiusKm * 2) / 111,
+        longitudeDelta: (radiusKm * 2) / 111,
+      });
+    } catch (e) {
+      setError('Konum alınamadı: ' + (e as Error).message);
+    } finally {
+      setLocating(false);
+    }
+  }
 
   async function submit() {
-    if (!city.trim() || !district.trim()) {
-      setError('İl ve ilçe zorunlu');
-      return;
-    }
+    if (!label.trim()) { setError('Konuma bir isim ver (ör: "İş yeri", "Ev")'); return; }
     setLoading(true);
     setError(null);
     try {
-      await api.post('/me/regions', { city: city.trim(), district: district.trim() }, token);
-      setCity('');
-      setDistrict('');
+      await api.post('/me/regions/location', {
+        label: label.trim(),
+        latitude: center.latitude,
+        longitude: center.longitude,
+        radiusKm,
+      }, token);
+      setLabel('');
+      setRadiusKm(10);
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
@@ -176,6 +259,8 @@ function AddRegionModal({
       setLoading(false);
     }
   }
+
+  const circleRadius = useMemo(() => radiusKm * 1000, [radiusKm]);
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -187,35 +272,79 @@ function AddRegionModal({
           <View style={mstyles.sheet}>
             <View style={mstyles.grabber} />
             <View style={mstyles.headerRow}>
-              <Text style={mstyles.title}>Bölge Ekle</Text>
+              <Text style={mstyles.title}>Konum Ekle</Text>
               <Pressable onPress={onClose} hitSlop={12}>
                 <Text style={mstyles.close}>✕</Text>
               </Pressable>
             </View>
 
-            <ErrorBanner message={error} />
+            <ScrollView style={{ maxHeight: 500 }}>
+              <ErrorBanner message={error} />
 
-            <Text style={mstyles.label}>İl</Text>
-            <View style={mstyles.chipRow}>
-              {enabledCities.map((c) => (
-                <Pressable
-                  key={c}
-                  onPress={() => setCity(c)}
-                  style={[mstyles.chip, city === c && mstyles.chipActive]}
+              <View style={mstyles.mapWrap}>
+                <MapView
+                  provider={PROVIDER_DEFAULT}
+                  style={StyleSheet.absoluteFillObject}
+                  region={mapRegion}
+                  onRegionChangeComplete={(reg) => {
+                    setCenter({ latitude: reg.latitude, longitude: reg.longitude });
+                    setMapRegion(reg);
+                  }}
+                  showsUserLocation
                 >
-                  <Text style={[mstyles.chipText, city === c && mstyles.chipTextActive]}>
-                    {c}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+                  <Circle
+                    center={center}
+                    radius={circleRadius}
+                    fillColor="rgba(255,199,44,0.15)"
+                    strokeColor={colors.primaryDark}
+                    strokeWidth={2}
+                  />
+                </MapView>
+                <View style={mstyles.centerPin}>
+                  <Text style={mstyles.centerPinText}>📍</Text>
+                </View>
+              </View>
 
-            <Input
-              label="İlçe"
-              value={district}
-              onChangeText={setDistrict}
-              placeholder="Örn: Altınordu, Kadıköy"
-            />
+              <Text style={mstyles.mapHint}>Haritayı kaydırarak merkezi ayarla</Text>
+
+              <Pressable onPress={useMyLocation} style={mstyles.locBtn} disabled={locating}>
+                <Text style={mstyles.locBtnText}>
+                  {locating ? 'Konum alınıyor...' : '📍 Konumumu Kullan'}
+                </Text>
+              </Pressable>
+
+              <View style={mstyles.radiusRow}>
+                <Text style={mstyles.radiusLabel}>YARIÇAP</Text>
+                <Text style={mstyles.radiusValue}>{radiusKm} km</Text>
+              </View>
+              <View style={mstyles.chipRow}>
+                {[5, 10, 15, 20, 30].map((r) => (
+                  <Pressable
+                    key={r}
+                    onPress={() => {
+                      setRadiusKm(r);
+                      setMapRegion({
+                        ...center,
+                        latitudeDelta: (r * 2) / 111,
+                        longitudeDelta: (r * 2) / 111,
+                      });
+                    }}
+                    style={[mstyles.chip, radiusKm === r && mstyles.chipActive]}
+                  >
+                    <Text style={[mstyles.chipText, radiusKm === r && mstyles.chipTextActive]}>
+                      {r} km
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <Input
+                label="Konum Adı"
+                value={label}
+                onChangeText={setLabel}
+                placeholder='Örn: "Ana bölgem", "Kadıköy şubesi"'
+              />
+            </ScrollView>
 
             <Pressable
               onPress={submit}
@@ -228,7 +357,7 @@ function AddRegionModal({
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={mstyles.primaryBtnText}>Bölgeyi Ekle</Text>
+                <Text style={mstyles.primaryBtnText}>Konumu Ekle</Text>
               )}
             </Pressable>
           </View>
@@ -261,11 +390,7 @@ const styles = StyleSheet.create({
   },
   addBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
   body: { padding: 16, paddingBottom: 40 },
-  empty: {
-    padding: 32,
-    alignItems: 'center',
-    marginTop: 40,
-  },
+  empty: { padding: 32, alignItems: 'center', marginTop: 40 },
   emptyIcon: { fontSize: 40, marginBottom: 12 },
   emptyTitle: { fontSize: 17, fontWeight: '800', color: colors.dark, marginBottom: 6 },
   emptySub: {
@@ -282,28 +407,26 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   emptyCtaText: { color: colors.dark, fontWeight: '800', fontSize: 14 },
-  list: { gap: 10 },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  regionCard: {
     backgroundColor: colors.card,
-    padding: 14,
     borderRadius: 14,
+    marginBottom: 10,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
   },
-  iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+  regionMap: {
+    height: 140,
+    position: 'relative',
   },
-  iconText: { fontSize: 18 },
-  itemTitle: { fontSize: 15, fontWeight: '700', color: colors.dark },
-  itemSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  regionBody: {
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  regionTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  regionSub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   removeBtn: {
     width: 32,
     height: 32,
@@ -313,6 +436,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   removeText: { fontSize: 14, color: colors.danger, fontWeight: '800' },
+  sectionHint: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.muted,
+    letterSpacing: 0.5,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  legacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  legacyTitle: { fontSize: 14, fontWeight: '700', color: colors.dark },
+  legacySub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  migrateHint: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 12,
+    lineHeight: 16,
+    fontStyle: 'italic',
+  },
 });
 
 const mstyles = StyleSheet.create({
@@ -327,6 +478,7 @@ const mstyles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 20,
     paddingBottom: 32,
+    maxHeight: '92%',
   },
   grabber: {
     alignSelf: 'center',
@@ -344,23 +496,61 @@ const mstyles = StyleSheet.create({
   },
   title: { fontSize: 18, fontWeight: '800', color: colors.dark },
   close: { fontSize: 20, color: colors.muted },
-  label: {
+
+  mapWrap: {
+    height: 200,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#EBF3EB',
+    marginBottom: 8,
+    position: 'relative',
+  },
+  centerPin: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -22,
+    marginLeft: -11,
+    width: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  centerPinText: { fontSize: 24 },
+  mapHint: {
+    fontSize: 11,
+    color: colors.muted,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  locBtn: {
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: colors.blueSoft,
+    alignItems: 'center',
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  locBtnText: { fontSize: 13, color: '#1E40AF', fontWeight: '700' },
+
+  radiusRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  radiusLabel: {
     fontSize: 11,
     fontWeight: '700',
     color: colors.muted,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 8,
-    marginTop: 8,
   },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
-  },
+  radiusValue: { fontSize: 16, fontWeight: '800', color: colors.dark },
+  chipRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 14 },
   chip: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1.5,
@@ -371,8 +561,9 @@ const mstyles = StyleSheet.create({
     backgroundColor: colors.primary,
     borderColor: colors.primaryDark,
   },
-  chipText: { fontSize: 13, fontWeight: '600', color: colors.muted },
+  chipText: { fontSize: 12, fontWeight: '600', color: colors.muted },
   chipTextActive: { color: colors.dark, fontWeight: '800' },
+
   primaryBtn: {
     backgroundColor: colors.dark,
     padding: 14,

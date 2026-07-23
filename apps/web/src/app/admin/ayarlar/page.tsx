@@ -6,7 +6,7 @@ import { adminSession } from '@/lib/session';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 
 type Values = Record<string, string>;
-type Tab = 'site' | 'sms' | 'mail' | 'bank';
+type Tab = 'site' | 'sms' | 'mail' | 'bank' | 'rekabet';
 
 export default function AdminSettingsPage() {
   const [values, setValues] = useState<Values>({});
@@ -109,6 +109,7 @@ export default function AdminSettingsPage() {
         <TabBtn active={tab === 'sms'} onClick={() => setTab('sms')}>SMS</TabBtn>
         <TabBtn active={tab === 'mail'} onClick={() => setTab('mail')}>E-posta</TabBtn>
         <TabBtn active={tab === 'bank'} onClick={() => setTab('bank')}>Havale / Banka</TabBtn>
+        <TabBtn active={tab === 'rekabet'} onClick={() => setTab('rekabet')}>Rekabet / Fiyat</TabBtn>
       </div>
 
       {tab === 'site' && (
@@ -263,6 +264,35 @@ export default function AdminSettingsPage() {
           <Field label="Açıklama Şablonu" hint="Havale yaparken açıklamaya ne yazılmalı?">
             <Input value={values['bank.note_template'] ?? ''} onChange={(e) => set('bank.note_template', e.target.value)} />
           </Field>
+        </Section>
+      )}
+
+      {tab === 'rekabet' && (
+        <Section
+          title="Rekabet ve Fiyat Kontrolü"
+          desc="Servisçilerin çok düşük teklif vermesini engellemek için minimum km başı ücret. Boş bırakırsan kontrol devre dışı."
+        >
+          <Field
+            label="Km başına minimum aylık ücret (₺)"
+            hint='Örnek: 500 ₺ girersen, 3 km mesafedeki bir talebe minimum 3 × 500 = 1500 ₺ teklif verilir. Bu değerin altına sistem izin vermez.'
+          >
+            <Input
+              type="number"
+              min="0"
+              step="10"
+              value={values['offer.min_price_per_km'] ?? ''}
+              onChange={(e) => set('offer.min_price_per_km', e.target.value)}
+              placeholder="500"
+            />
+          </Field>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+            <strong>💡 Nasıl çalışır:</strong>
+            <p className="mt-1">
+              Servisçi teklif verirken sistem talebin evi–okulu mesafesini hesaplar,
+              seçtiğin değerle çarpar. Bu tutarın altındaki tekliflere hata döner.
+              Böylece hem şoförlerin emeği hem de piyasa fiyatı korunmuş olur.
+            </p>
+          </div>
         </Section>
       )}
 

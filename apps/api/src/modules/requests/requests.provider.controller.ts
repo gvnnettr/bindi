@@ -232,6 +232,15 @@ export class RequestsProviderController {
       distanceKm,
       etaMin,
       hasLocation: request.latitude != null && request.longitude != null,
+      firstSchoolLocation:
+        firstSchool && firstSchool.latitude != null && firstSchool.longitude != null
+          ? {
+              id: firstSchool.id,
+              name: firstSchool.name,
+              latitude: firstSchool.latitude,
+              longitude: firstSchool.longitude,
+            }
+          : null,
       // KVKK: veli iletişim SADECE seçilene açılır
       parent: isSelected
         ? { name: request.parent.name, phone: request.parent.phone }
@@ -264,6 +273,25 @@ export class RequestsProviderController {
       })),
       dismissed: !!dismissed,
     };
+  }
+
+  @Get(':id/offer-stats')
+  async offerStats(@Req() req: ProviderRequest, @Param('id') id: string) {
+    const providerId = req.provider.id;
+    await this.assertActive(providerId);
+    // OffersService inject etmemek için direkt query
+    const rows = await this.offers.find({ where: { requestId: id } });
+    const filtered = rows.filter(
+      (r) => r.providerId !== providerId && r.status !== 'rejected',
+    );
+    if (filtered.length === 0) {
+      return { count: 0, min: null, max: null, avg: null };
+    }
+    const prices = filtered.map((r) => Number(r.monthlyPrice));
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const avg = Math.round(prices.reduce((s, x) => s + x, 0) / prices.length);
+    return { count: filtered.length, min, max, avg };
   }
 
   @Post(':id/decline')

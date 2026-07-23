@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '../../../../src/api/client';
 import { useAuth } from '../../../../src/state/auth';
 import { Button, ErrorBanner, Input, InfoBanner } from '../../../../src/components/ui';
+import { RouteMap } from '../../../../src/components/RouteMap';
 import { colors } from '../../../../src/theme/colors';
 
 interface Detail {
@@ -25,12 +26,20 @@ interface Detail {
   district: string;
   neighborhood: string | null;
   address: string | null;
+  latitude: number | null;
+  longitude: number | null;
   pickupType: string | null;
   notes: string | null;
   createdAt: string;
   distanceKm: number | null;
   etaMin: number | null;
   hasLocation: boolean;
+  firstSchoolLocation: {
+    id: string;
+    name: string;
+    latitude: number;
+    longitude: number;
+  } | null;
   parent: { name: string; phone: string };
   students: Array<{
     name: string;
@@ -55,11 +64,19 @@ interface Vehicle {
   seats: number;
 }
 
+interface OfferStats {
+  count: number;
+  min: number | null;
+  max: number | null;
+  avg: number | null;
+}
+
 export default function TalepDetayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token } = useAuth();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [stats, setStats] = useState<OfferStats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
@@ -67,12 +84,14 @@ export default function TalepDetayScreen() {
   const load = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const [d, vs] = await Promise.all([
+      const [d, vs, st] = await Promise.all([
         api.get<Detail>(`/me/requests/${id}`, token),
         api.get<Vehicle[]>('/me/vehicles', token),
+        api.get<OfferStats>(`/me/requests/${id}/offer-stats`, token),
       ]);
       setDetail(d);
       setVehicles(vs);
+      setStats(st);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
@@ -130,11 +149,11 @@ export default function TalepDetayScreen() {
               {detail.city} · {detail.district}
               {detail.neighborhood ? ` · ${detail.neighborhood}` : ''}
             </Text>
-            {detail.address && hasOffer && (
+            {detail.address && isWon && (
               <Text style={styles.bodyMuted}>{detail.address}</Text>
             )}
-            {!hasOffer && detail.address && (
-              <Text style={styles.hint}>Tam adres teklif verince açılır</Text>
+            {!isWon && detail.address && (
+              <Text style={styles.hint}>Tam adres, teklifin kabul edilirse görünür</Text>
             )}
             {detail.distanceKm != null && detail.etaMin != null && (
               <View style={styles.distanceChip}>
@@ -144,6 +163,19 @@ export default function TalepDetayScreen() {
               </View>
             )}
           </View>
+
+          {detail.latitude != null && detail.longitude != null && detail.firstSchoolLocation && (
+            <RouteMap
+              home={{ latitude: detail.latitude, longitude: detail.longitude }}
+              school={{
+                latitude: detail.firstSchoolLocation.latitude,
+                longitude: detail.firstSchoolLocation.longitude,
+                name: detail.firstSchoolLocation.name,
+              }}
+              distanceKm={detail.distanceKm}
+              etaMin={detail.etaMin}
+            />
+          )}
 
           <View style={styles.card}>
             <SectionLabel>Veli</SectionLabel>
@@ -182,6 +214,44 @@ export default function TalepDetayScreen() {
             <View style={styles.card}>
               <SectionLabel>Veli Notu</SectionLabel>
               <Text style={styles.body14}>{detail.notes}</Text>
+            </View>
+          )}
+
+          {stats && stats.count > 0 && (
+            <View style={styles.competitorCard}>
+              <View style={styles.competitorHeader}>
+                <Text style={styles.competitorLabel}>
+                  RAKİP TEKLİFLER · {stats.count} SERVİSÇİ
+                </Text>
+                {stats.avg != null && (
+                  <Text style={styles.competitorAvg}>ort. {stats.avg.toLocaleString('tr-TR')} ₺</Text>
+                )}
+              </View>
+              <View style={styles.competitorRow}>
+                {stats.min != null && (
+                  <View style={styles.competitorCell}>
+                    <Text style={styles.competitorCellLabel}>MİN</Text>
+                    <Text style={styles.competitorCellValue}>{stats.min.toLocaleString('tr-TR')} ₺</Text>
+                  </View>
+                )}
+                {stats.avg != null && (
+                  <View style={styles.competitorCell}>
+                    <Text style={styles.competitorCellLabel}>ORT.</Text>
+                    <Text style={[styles.competitorCellValue, { color: colors.primaryDark }]}>
+                      {stats.avg.toLocaleString('tr-TR')} ₺
+                    </Text>
+                  </View>
+                )}
+                {stats.max != null && (
+                  <View style={styles.competitorCell}>
+                    <Text style={styles.competitorCellLabel}>MAX</Text>
+                    <Text style={styles.competitorCellValue}>{stats.max.toLocaleString('tr-TR')} ₺</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.competitorHint}>
+                Bu talebe {stats.count} servisçi teklif verdi. Veli fiyat + puanın + geçmiş yorumlarla birini seçecek.
+              </Text>
             </View>
           )}
 
@@ -571,4 +641,58 @@ const styles = StyleSheet.create({
     borderColor: '#93C5FD',
   },
   distanceText: { fontSize: 12, fontWeight: '700', color: '#1E40AF' },
+  competitorCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 12,
+  },
+  competitorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  competitorLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
+  competitorAvg: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.dark,
+  },
+  competitorRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  competitorCell: {
+    flex: 1,
+    padding: 10,
+    backgroundColor: colors.bg,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  competitorCellLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: colors.muted,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  competitorCellValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.dark,
+  },
+  competitorHint: {
+    fontSize: 11,
+    color: colors.muted,
+    lineHeight: 16,
+  },
 });

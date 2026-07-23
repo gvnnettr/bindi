@@ -95,6 +95,9 @@ export const SETTINGS_KEYS = {
   BANK_HOLDER: 'bank.holder',
   BANK_IBAN: 'bank.iban',
   BANK_NOTE_TEMPLATE: 'bank.note_template',
+
+  // Rekabet / fiyat kontrolü
+  OFFER_MIN_PRICE_PER_KM: 'offer.min_price_per_km', // TL per km (default: 500)
 } as const;
 
 export type SettingsKey =

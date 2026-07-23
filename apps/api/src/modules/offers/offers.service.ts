@@ -12,10 +12,12 @@ import { ServiceRequest } from '@servis/db';
 import { Vehicle } from '@servis/db';
 import { Provider } from '@servis/db';
 import { ProviderDocument, DocumentDefinition } from '@servis/db';
-import { OFFER_STATUS, REQUEST_STATUS } from '@servis/shared';
+import { OFFER_STATUS, REQUEST_STATUS, SETTINGS_KEYS } from '@servis/shared';
 import { SmsService } from '../sms/sms.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
+import { SettingsService } from '../settings/settings.service';
+import { haversineKm } from '../../common/geo';
 
 export interface CreateOfferInput {
   requestId: string;
@@ -41,6 +43,7 @@ export class OffersService {
     private readonly sms: SmsService,
     private readonly notif: NotificationsService,
     private readonly enrollments: EnrollmentsService,
+    private readonly settings: SettingsService,
   ) {}
 
   private async assertDocsClean(providerId: string) {
@@ -74,10 +77,43 @@ export class OffersService {
     // Tüm zorunlu belgeler onaylı değilse teklif verilmez (admin sonra bir belgeyi reddederse de bu geçerli)
     await this.assertDocsClean(providerId);
 
-    const request = await this.requests.findOne({ where: { id: input.requestId } });
+    const request = await this.requests.findOne({
+      where: { id: input.requestId },
+      relations: [
+        'requestStudents',
+        'requestStudents.student',
+        'requestStudents.student.school',
+      ],
+    });
     if (!request) throw new NotFoundException('Talep bulunamadı');
     if (request.status !== REQUEST_STATUS.OPEN)
       throw new BadRequestException('Talep artık teklif almıyor');
+
+    // Km başına min fiyat kontrolü (KVKK/rekabet)
+    try {
+      const raw = await this.settings.get(SETTINGS_KEYS.OFFER_MIN_PRICE_PER_KM);
+      const minPricePerKm = raw ? Number(raw) : 0;
+      if (minPricePerKm > 0 && request.latitude != null && request.longitude != null) {
+        const firstSchool = request.requestStudents[0]?.student?.school ?? null;
+        if (firstSchool && firstSchool.latitude != null && firstSchool.longitude != null) {
+          const km = haversineKm(
+            { lat: request.latitude, lng: request.longitude },
+            { lat: firstSchool.latitude, lng: firstSchool.longitude },
+          );
+          const roundedKm = Math.max(1, Math.round(km * 10) / 10); // min 1 km baz
+          const minAllowed = Math.round(roundedKm * minPricePerKm);
+          const priceNum = Number(input.monthlyPrice);
+          if (priceNum < minAllowed) {
+            throw new BadRequestException(
+              `Bu talep için minimum aylık ücret ${minAllowed.toLocaleString('tr-TR')} ₺ (${roundedKm} km × ${minPricePerKm} ₺/km). Rekabet kurallarını korumak için daha düşük teklif kaydedilmez.`,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      // settings okuma hatası ise sessiz geç
+    }
 
     if (input.vehicleId) {
       const vehicle = await this.vehicles.findOne({
@@ -184,6 +220,31 @@ export class OffersService {
         })),
       },
     }));
+  }
+
+  /**
+   * Bir talebe verilmiş tekliflerin özet istatistiği.
+   * Şu an sorgulayan servisçinin kendi teklifi hariç.
+   * Servisçi teklif verirken 'rakip fiyatlar' widget'ında kullanır.
+   */
+  async offerStatsForRequest(
+    requestId: string,
+    excludeProviderId: string,
+  ): Promise<{ count: number; min: number | null; max: number | null; avg: number | null }> {
+    const rows = await this.offers.find({
+      where: { requestId },
+    });
+    const filtered = rows.filter(
+      (r) => r.providerId !== excludeProviderId && r.status !== 'rejected',
+    );
+    if (filtered.length === 0) {
+      return { count: 0, min: null, max: null, avg: null };
+    }
+    const prices = filtered.map((r) => Number(r.monthlyPrice));
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const avg = Math.round(prices.reduce((s, x) => s + x, 0) / prices.length);
+    return { count: filtered.length, min, max, avg };
   }
 
   async selectByMagicToken(token: string, offerId: string) {

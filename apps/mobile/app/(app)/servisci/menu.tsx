@@ -41,16 +41,16 @@ export default function MenuScreen() {
       onPress: () => router.push('/(app)/servisci/tekliflerim'),
     },
     {
+      label: 'Konum',
+      desc: 'Hizmet çemberim — bu alandaki talepler',
+      icon: <Path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />,
+      onPress: () => router.push('/(app)/servisci/bolgelerim'),
+    },
+    {
       label: 'Şirket Belgelerim',
       desc: 'Vergi levhası, K belgesi vs.',
       icon: <Path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8" />,
       onPress: () => router.push('/(app)/servisci/belgelerim'),
-    },
-    {
-      label: 'Hizmet Bölgelerim',
-      desc: 'Talep almak istediğin il/ilçeler',
-      icon: <Path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />,
-      onPress: () => router.push('/(app)/servisci/bolgelerim'),
     },
     {
       label: 'Puanlarım',
