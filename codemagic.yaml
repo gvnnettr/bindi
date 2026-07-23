@@ -1,0 +1,76 @@
+workflows:
+  ios-adhoc:
+    name: Bindi iOS Ad Hoc (cihaza yüklenebilir)
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        - firebase        # Codemagic UI'dan tanımlanacak: GOOGLE_SERVICE_INFO_PLIST_B64, GOOGLE_SERVICES_JSON_B64
+      vars:
+        BUNDLE_ID: "com.gvn.bindi"
+        XCODE_WORKSPACE: "Bindi.xcworkspace"
+        XCODE_SCHEME: "Bindi"
+      node: 20.11.0
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: ad_hoc
+        bundle_identifier: com.gvn.bindi
+    integrations:
+      app_store_connect: bindi-asc-key   # Codemagic > Team Settings > Integrations > App Store Connect
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm@9
+      - name: Install workspace dependencies
+        script: |
+          pnpm install --frozen-lockfile
+      - name: Restore Firebase configs (from encrypted env)
+        working_directory: apps/mobile
+        script: |
+          echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > GoogleService-Info.plist
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > google-services.json
+      - name: Expo prebuild
+        working_directory: apps/mobile
+        script: |
+          npx expo prebuild --platform ios --clean --no-install
+      - name: Pod install
+        working_directory: apps/mobile/ios
+        script: |
+          pod install --repo-update
+      - name: Increment build number
+        working_directory: apps/mobile/ios
+        script: |
+          BUILD_NUMBER=$(($(date +%s) % 1000000))
+          agvtool new-version -all $BUILD_NUMBER
+      - name: Fetch signing files
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files \
+            "$BUNDLE_ID" \
+            --type IOS_APP_ADHOC \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Build IPA
+        working_directory: apps/mobile/ios
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - apps/mobile/ios/build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      email:
+        recipients:
+          - guvenlevent@gmail.com
+        notify:
+          success: true
+          failure: true

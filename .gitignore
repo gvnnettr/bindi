@@ -1,0 +1,34 @@
+node_modules
+.env
+.env.local
+.env.*.local
+dist
+.next
+.turbo
+coverage
+*.log
+.DS_Store
+
+# Mobile / Expo
+.expo/
+apps/mobile/ios/
+apps/mobile/android/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Firebase secrets
+.firebase-admin*.json
+apps/mobile/GoogleService-Info.plist
+apps/mobile/google-services.json
+
+# SSH keys
+*.pem
+emafly-new-server*
+
+# Build artifacts
+apps/mobile/ios/build/
+apps/mobile/android/build/
+

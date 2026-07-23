@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: servis
+      POSTGRES_PASSWORD: servis
+      POSTGRES_DB: servis_platform
+    ports:
+      - "5432:5432"
+    volumes:
+      - servis_pg_data:/var/lib/postgresql/data
+
+volumes:
+  servis_pg_data:

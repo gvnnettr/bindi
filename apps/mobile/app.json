@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Bindi",
+    "slug": "bindi",
+    "owner": "gvnyazilims-organization",
+    "scheme": "bindi",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.gvn.bindi",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "remote-notification",
+          "location"
+        ],
+        "NSLocationWhenInUseUsageDescription": "Servis başlat ve bitir sırasında velilere canlı konumu göstermek için kullanılır.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Servis boyunca velilere canlı konumu göstermek için kullanılır.",
+        "NSPhotoLibraryUsageDescription": "Ödeme dekontunuzu yüklemek için galeriye erişim gereklidir.",
+        "NSCameraUsageDescription": "Belge ve dekont fotoğrafı çekmek için kameraya erişim gereklidir."
+      }
+    },
+    "android": {
+      "package": "com.gvn.bindi",
+      "googleServicesFile": "./google-services.json",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFC72C",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "POST_NOTIFICATIONS"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ],
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/bindi-logo.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#FFC72C",
+          "imageWidth": 260
+        }
+      ],
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "apiUrl": "https://bindi.com.tr/api",
+      "eas": {
+        "projectId": "a1276ae6-1724-43f8-834e-1d8ec29c5a39"
+      },
+      "router": {}
+    }
+  }
+}
