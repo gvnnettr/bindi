@@ -13,11 +13,9 @@ workflows:
       node: 20.11.0
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.gvn.bindi
+      # Manual signing: env grubundaki BINDI_P12_B64 + BINDI_PROVISION_B64 kullanılıyor
     integrations:
-      app_store_connect: bindi-asc-key   # Codemagic > Team Settings > Integrations > App Store Connect
+      app_store_connect: bindi-asc-key   # TestFlight upload için hala gerekli
     triggering:
       events:
         - push
@@ -49,15 +47,21 @@ workflows:
         script: |
           BUILD_NUMBER=$(($(date +%s) % 1000000))
           agvtool new-version -all $BUILD_NUMBER
-      - name: Fetch signing files
+      - name: Set up manual code signing
         script: |
+          # Decode cert & profile from env
+          echo "$BINDI_P12_B64" | base64 --decode > /tmp/bindi.p12
+          echo "$BINDI_PROVISION_B64" | base64 --decode > /tmp/bindi.mobileprovision
+          # Init keychain + add cert
           keychain initialize
-          app-store-connect fetch-signing-files \
-            "$BUNDLE_ID" \
-            --platform IOS \
-            --type IOS_APP_STORE \
-            --create
-          keychain add-certificates
+          keychain add-certificates \
+            --certificate /tmp/bindi.p12 \
+            --certificate-password "$BINDI_P12_PASSWORD"
+          # Install provisioning profile
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          UUID=$(security cms -D -i /tmp/bindi.mobileprovision | plutil -extract UUID xml1 -o - - | sed -n 's|.*<string>\(.*\)</string>.*|\1|p')
+          cp /tmp/bindi.mobileprovision "$HOME/Library/MobileDevice/Provisioning Profiles/$UUID.mobileprovision"
+          echo "Profile installed with UUID: $UUID"
           xcode-project use-profiles
       - name: Build IPA
         working_directory: apps/mobile/ios
