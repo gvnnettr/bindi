@@ -27,7 +27,7 @@ import * as crypto from 'crypto';
 import { In, DataSource } from 'typeorm';
 import { MatchingService } from '../requests/matching.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { haversineKm, etaMinutes } from '../../common/geo';
+import { haversineKm, etaMinutes, geocodeAddress } from '../../common/geo';
 
 function maskName(s: string | null | undefined): string {
   if (!s) return '';
@@ -433,6 +433,22 @@ export class ParentsService {
     const magicExpiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
     const schoolIds = Array.from(new Set(students.map((s) => s.schoolId!).filter(Boolean)));
 
+    // Konum verilmemişse OSM Nominatim ile adresten koordinat bul (best-effort, sessiz)
+    let resolvedLat = input.latitude ?? null;
+    let resolvedLng = input.longitude ?? null;
+    if (resolvedLat == null || resolvedLng == null) {
+      const geo = await geocodeAddress({
+        city: input.city,
+        district: input.district,
+        neighborhood: input.neighborhood,
+        address: input.address,
+      });
+      if (geo) {
+        resolvedLat = geo.lat;
+        resolvedLng = geo.lng;
+      }
+    }
+
     const created = await this.ds.transaction(async (m) => {
       const req = m.getRepository(ServiceRequest).create({
         parentId,
@@ -440,8 +456,8 @@ export class ParentsService {
         district: input.district,
         neighborhood: input.neighborhood,
         address: input.address,
-        latitude: input.latitude ?? null,
-        longitude: input.longitude ?? null,
+        latitude: resolvedLat,
+        longitude: resolvedLng,
         pickupType: input.pickupType,
         notes: input.notes ?? null,
         status: 'open',
@@ -463,8 +479,8 @@ export class ParentsService {
         schoolIds,
         city: input.city,
         district: input.district,
-        latitude: input.latitude ?? null,
-        longitude: input.longitude ?? null,
+        latitude: resolvedLat,
+        longitude: resolvedLng,
       })
       .then(async (providers) => {
         for (const p of providers) {

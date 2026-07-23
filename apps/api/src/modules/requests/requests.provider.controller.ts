@@ -28,6 +28,21 @@ import {
 import { REQUEST_STATUS } from '@servis/shared';
 import { haversineKm, etaMinutes } from '../../common/geo';
 
+// İsim -> Baş harf maskesi ("Elif Güven" -> "E.G.")
+function maskInitials(name: string | null | undefined): string {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.map((p) => p[0].toUpperCase() + '.').join('');
+}
+
+// Adres text'ini bulanıklaştır: sokak/no bilgisini kırp, ilk 2 kelimeyi tut
+function maskAddress(address: string | null | undefined): string {
+  if (!address) return '';
+  const words = address.trim().split(/\s+/);
+  if (words.length <= 2) return address;
+  return words.slice(0, 2).join(' ') + '...';
+}
+
 @UseGuards(ProviderJwtStrategy)
 @Controller('me/requests')
 export class RequestsProviderController {
@@ -144,7 +159,7 @@ export class RequestsProviderController {
         etaMin,
         hasLocation: r.latitude != null && r.longitude != null,
         students: r.requestStudents.map((rs) => ({
-          name: rs.student.name,
+          name: maskInitials(rs.student.name), // gizlilik: E.G. gibi
           class: rs.student.class,
           school: rs.student.school
             ? { id: rs.student.school.id, name: rs.student.school.name }
@@ -184,6 +199,8 @@ export class RequestsProviderController {
       where: { providerId, requestId: id },
     });
     const hasOffer = myOffers.length > 0;
+    // Tam bilgi (isim/telefon/adres) SADECE teklif seçildiyse görünür (KVKK)
+    const isSelected = myOffers.some((o) => o.status === 'selected');
 
     const firstSchool = request.requestStudents[0]?.student?.school ?? null;
     let distanceKm: number | null = null;
@@ -205,7 +222,8 @@ export class RequestsProviderController {
       city: request.city,
       district: request.district,
       neighborhood: request.neighborhood,
-      address: request.address,
+      // KVKK: adres teklif verildiğinde de gizlenir, sadece seçilen servisçi görür
+      address: isSelected ? request.address : maskAddress(request.address),
       latitude: request.latitude,
       longitude: request.longitude,
       pickupType: request.pickupType,
@@ -214,17 +232,21 @@ export class RequestsProviderController {
       distanceKm,
       etaMin,
       hasLocation: request.latitude != null && request.longitude != null,
-      parent: hasOffer
+      // KVKK: veli iletişim SADECE seçilene açılır
+      parent: isSelected
         ? { name: request.parent.name, phone: request.parent.phone }
         : {
-            name: request.parent.name.charAt(0) + '***',
+            name: maskInitials(request.parent.name),
             phone: '****' + request.parent.phone.slice(-2),
           },
       students: request.requestStudents.map((rs) => ({
-        name: rs.student.name,
+        // KVKK: öğrenci ismi sadece seçilene açılır
+        name: isSelected ? rs.student.name : maskInitials(rs.student.name),
         class: rs.student.class,
         school: rs.student.school,
       })),
+      isSelected,
+      hasOffer,
       myOffers: myOffers.map((o) => ({
         id: o.id,
         monthlyPrice: o.monthlyPrice,

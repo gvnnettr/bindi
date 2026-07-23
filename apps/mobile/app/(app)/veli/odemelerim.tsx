@@ -235,11 +235,19 @@ function ReceiptUploadModal({
     setLoading(true);
     setError(null);
     try {
+      // iOS local URI (file:///...) — HEIC ihtimali için mimeType tespit et
+      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
+      const mimeType =
+        ext === 'png' ? 'image/png' :
+        ext === 'heic' ? 'image/heic' :
+        ext === 'webp' ? 'image/webp' :
+        ext === 'pdf' ? 'application/pdf' :
+        'image/jpeg';
       const form = new FormData();
       form.append('file', {
         uri,
-        name: `receipt-${Date.now()}.jpg`,
-        type: 'image/jpeg',
+        name: `receipt-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`,
+        type: mimeType,
       } as any);
       if (note) form.append('parentNote', note);
       const res = await fetch(`${API_URL}/parent/payments/${payment.id}/receipt`, {
@@ -247,18 +255,23 @@ function ReceiptUploadModal({
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/json',
+          // Content-Type header koyma — RN otomatik boundary üretir
         },
         body: form,
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(JSON.parse(text)?.message ?? `HTTP ${res.status}`);
+        let msg = `HTTP ${res.status}`;
+        try {
+          const text = await res.text();
+          msg = JSON.parse(text)?.message ?? text.slice(0, 120);
+        } catch {}
+        throw new Error(msg);
       }
       setUri(null);
       setNote('');
       onDone();
     } catch (e) {
-      setError((e as Error).message);
+      setError('Dekont yüklenemedi: ' + (e as Error).message);
     } finally {
       setLoading(false);
     }

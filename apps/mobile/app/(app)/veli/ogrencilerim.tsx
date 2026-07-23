@@ -119,9 +119,6 @@ export default function OgrencilerimScreen() {
                 {item.class ?? '—'}
                 {item.school ? ` · ${item.school.name}` : ''}
               </Text>
-              {!item.isOwner && (
-                <Text style={styles.guest}>Aile üyesi olarak eklendi</Text>
-              )}
             </View>
             {item.isOwner && (
               <Pressable onPress={() => removeStudent(item.id, item.name)} hitSlop={8}>

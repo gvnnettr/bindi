@@ -388,11 +388,40 @@ export class EnrollmentsService {
     if (!payment) throw new NotFoundException('Ödeme bulunamadı');
     if (payment.enrollment.providerId !== providerId)
       throw new NotFoundException('Ödeme bulunamadı');
+    const previousStatus = payment.status;
     payment.status = input.status;
     if (input.status === 'paid' && !payment.paidAt) payment.paidAt = new Date();
     if (input.status !== 'paid') payment.paidAt = null;
     if (input.providerNote !== undefined) payment.providerNote = input.providerNote || null;
     await this.payments.save(payment);
+
+    // Veliye bildirim (dekont onay/red durumlarında)
+    try {
+      if (previousStatus === 'submitted' || previousStatus === 'pending') {
+        if (input.status === 'paid') {
+          await this.notif.create({
+            userType: 'parent',
+            userId: payment.enrollment.parentId,
+            type: 'payment.approved',
+            title: 'Ödemeniz onaylandı ✅',
+            body: `${payment.period} dönemi ${Number(payment.amount)}₺ ödemesi servisçi tarafından onaylandı.`,
+            metadata: { paymentId: payment.id, enrollmentId: payment.enrollmentId, period: payment.period },
+          });
+        } else if (input.status === 'pending' && input.providerNote) {
+          await this.notif.create({
+            userType: 'parent',
+            userId: payment.enrollment.parentId,
+            type: 'payment.rejected',
+            title: 'Dekont reddedildi ⚠️',
+            body: `${payment.period} ödemesi: ${input.providerNote}. Lütfen yeni dekont yükleyin.`,
+            metadata: { paymentId: payment.id, enrollmentId: payment.enrollmentId, period: payment.period },
+          });
+        }
+      }
+    } catch {
+      // bildirim başarısız olsa da işlem tamam
+    }
+
     return { ok: true };
   }
 
