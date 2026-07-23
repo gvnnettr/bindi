@@ -1,6 +1,6 @@
 workflows:
-  ios-adhoc:
-    name: Bindi iOS Ad Hoc (cihaza yüklenebilir)
+  ios-testflight:
+    name: Bindi iOS TestFlight
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -14,7 +14,7 @@ workflows:
       xcode: latest
       cocoapods: default
       ios_signing:
-        distribution_type: ad_hoc
+        distribution_type: app_store
         bundle_identifier: com.gvn.bindi
     integrations:
       app_store_connect: bindi-asc-key   # Codemagic > Team Settings > Integrations > App Store Connect
@@ -55,7 +55,7 @@ workflows:
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
             --platform IOS \
-            --type IOS_APP_ADHOC \
+            --type IOS_APP_STORE \
             --create
           keychain add-certificates
           xcode-project use-profiles
@@ -75,3 +75,8 @@ workflows:
         notify:
           success: true
           failure: true
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
