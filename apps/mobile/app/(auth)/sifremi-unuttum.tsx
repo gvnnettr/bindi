@@ -7,14 +7,17 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '../../src/api/client';
 import { Button, ErrorBanner } from '../../src/components/ui';
 import { PhoneField } from '../../src/components/PhoneField';
 import { colors } from '../../src/theme/colors';
+import type { Role } from '../../src/state/auth';
 
 export default function SifremiUnuttum() {
+  const { role } = useLocalSearchParams<{ role: Role }>();
+  const isProvider = role === 'provider';
   const [phone, setPhone] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -29,11 +32,20 @@ export default function SifremiUnuttum() {
     setError(null);
     setLoading(true);
     try {
-      await api.post('/providers/forgot-password', { phone: backendPhone });
-      router.replace({
-        pathname: '/(auth)/otp',
-        params: { phone: backendPhone, role: 'provider', mode: 'reset' },
-      });
+      if (isProvider) {
+        await api.post('/providers/forgot-password', { phone: backendPhone });
+        router.replace({
+          pathname: '/(auth)/otp',
+          params: { phone: backendPhone, role: 'provider', mode: 'reset' },
+        });
+      } else {
+        // Veli: /parents/login/request OTP gönderir, /parents/login/otp'da newPassword ile şifre belirlenir
+        await api.post('/parents/login/request', { phone: backendPhone });
+        router.replace({
+          pathname: '/(auth)/otp',
+          params: { phone: backendPhone, role: 'parent', mode: 'reset' },
+        });
+      }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : (e as Error).message;
       setError(msg);

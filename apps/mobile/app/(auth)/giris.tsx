@@ -20,7 +20,7 @@ interface ParentLoginResp {
   name: string;
 }
 interface ParentCheckResp {
-  hasAccount: boolean;
+  exists: boolean;
   hasPassword: boolean;
 }
 
@@ -66,7 +66,7 @@ export default function GirisScreen() {
         const check = await api.post<ParentCheckResp>('/parents/login/check', {
           phone: backendPhone,
         });
-        if (!check.hasAccount) {
+        if (!check.exists) {
           setError('Bu numara kayıtlı değil. Önce web sitesinden teklif talep etmen gerekir.');
           setLoading(false);
           return;
@@ -155,7 +155,12 @@ export default function GirisScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.push('/(auth)/sifremi-unuttum')}
+            onPress={() =>
+              router.push({
+                pathname: '/(auth)/sifremi-unuttum',
+                params: { role: isProvider ? 'provider' : 'parent' },
+              })
+            }
             style={styles.forgot}
             hitSlop={8}
           >
