@@ -56,7 +56,10 @@ workflows:
           # Codemagic uploads yüklenmiş cert + profile'ı ~/private_keys/ altına indirir
           keychain initialize
           keychain add-certificates
-          xcode-project use-profiles
+          # --warn-only: node_modules altındaki alt-projelerin signing hataları uyarı olur, build fail etmez
+          xcode-project use-profiles \
+            --project apps/mobile/ios/Bindi.xcodeproj \
+            --warn-only
       - name: Build IPA
         working_directory: apps/mobile/ios
         script: |
