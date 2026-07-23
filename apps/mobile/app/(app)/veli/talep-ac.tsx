@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +18,13 @@ import { api, ApiError } from '../../../src/api/client';
 import { useAuth } from '../../../src/state/auth';
 import { Button, ErrorBanner, Input } from '../../../src/components/ui';
 import { colors } from '../../../src/theme/colors';
+
+interface QuickSchool {
+  id: string;
+  name: string;
+  city: string;
+  district: string;
+}
 
 interface Student {
   id: string;
@@ -49,6 +57,9 @@ export default function TalepAcScreen() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Hızlı öğrenci ekleme modal state
+  const [addStudentOpen, setAddStudentOpen] = useState(false);
 
   async function autoFillLocation() {
     setError(null);
@@ -180,12 +191,7 @@ export default function TalepAcScreen() {
               <Text style={styles.stepTitle}>Öğrenci seç</Text>
               <Text style={styles.stepSub}>Bu talep hangi çocuğun için?</Text>
 
-              {students.length === 0 ? (
-                <View style={styles.emptyBox}>
-                  <Text style={styles.emptyTitle}>Öğrenci yok</Text>
-                  <Text style={styles.emptySub}>Devam etmek için önce Öğrenciler sekmesinden çocuğunu ekle.</Text>
-                </View>
-              ) : (
+              {students.length > 0 && (
                 <View style={styles.studentList}>
                   {students.map((s) => {
                     const active = selectedIds.includes(s.id);
@@ -210,6 +216,26 @@ export default function TalepAcScreen() {
                   })}
                 </View>
               )}
+
+              <Pressable
+                onPress={() => setAddStudentOpen(true)}
+                style={({ pressed }) => [
+                  styles.addStudentBtn,
+                  pressed && { opacity: 0.7 },
+                ]}
+              >
+                <Text style={styles.addStudentIcon}>+</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.addStudentText}>
+                    {students.length === 0 ? 'İlk öğrencini ekle' : 'Yeni öğrenci ekle'}
+                  </Text>
+                  <Text style={styles.addStudentSub}>
+                    {students.length === 0
+                      ? 'Servis talebi açabilmek için önce çocuk bilgisi gerek'
+                      : 'Aynı taleple birden fazla çocuk için başvurabilirsin'}
+                  </Text>
+                </View>
+              </Pressable>
             </>
           )}
 
@@ -371,7 +397,134 @@ export default function TalepAcScreen() {
           )}
         </View>
       </KeyboardAvoidingView>
+
+      <QuickAddStudentModal
+        visible={addStudentOpen}
+        token={token}
+        onClose={() => setAddStudentOpen(false)}
+        onDone={async (newStudent) => {
+          setAddStudentOpen(false);
+          setStudents((prev) => [...prev, newStudent]);
+          setSelectedIds((prev) => [...prev, newStudent.id]);
+        }}
+      />
     </View>
+  );
+}
+
+function QuickAddStudentModal({
+  visible,
+  token,
+  onClose,
+  onDone,
+}: {
+  visible: boolean;
+  token: string | null;
+  onClose: () => void;
+  onDone: (s: Student) => void;
+}) {
+  const [name, setName] = useState('');
+  const [studentClass, setStudentClass] = useState('');
+  const [schools, setSchools] = useState<QuickSchool[]>([]);
+  const [schoolQ, setSchoolQ] = useState('');
+  const [selectedSchool, setSelectedSchool] = useState<QuickSchool | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!visible) return;
+      (async () => {
+        try {
+          const s = await api.get<QuickSchool[]>('/schools', token);
+          setSchools(s);
+        } catch {}
+      })();
+    }, [visible, token]),
+  );
+
+  const filtered = schoolQ
+    ? schools.filter((s) => s.name.toLowerCase().includes(schoolQ.toLowerCase())).slice(0, 8)
+    : schools.slice(0, 8);
+
+  async function submit() {
+    if (!name.trim()) { setError('Ad soyad gir'); return; }
+    if (!selectedSchool) { setError('Okul seç'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const created = await api.post<Student>(
+        '/me/parent/students',
+        {
+          name: name.trim(),
+          class: studentClass.trim() || undefined,
+          schoolId: selectedSchool.id,
+        },
+        token,
+      );
+      setName('');
+      setStudentClass('');
+      setSelectedSchool(null);
+      setSchoolQ('');
+      onDone({ ...created, school: selectedSchool as any, isOwner: true });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={qstyles.backdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%' }}
+        >
+          <View style={qstyles.sheet}>
+            <View style={qstyles.grabber} />
+            <View style={qstyles.headerRow}>
+              <Text style={qstyles.title}>Yeni Öğrenci Ekle</Text>
+              <Pressable onPress={onClose} hitSlop={12}>
+                <Text style={qstyles.close}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 480 }}>
+              <ErrorBanner message={error} />
+              <Input label="Ad Soyad" value={name} onChangeText={setName} />
+              <Input label="Sınıf" value={studentClass} onChangeText={setStudentClass} placeholder="Örn: 3. Sınıf" />
+              <Text style={qstyles.subLabel}>Okul</Text>
+              <Input
+                value={schoolQ}
+                onChangeText={setSchoolQ}
+                placeholder={selectedSchool ? selectedSchool.name : 'Okul ara...'}
+              />
+              {filtered.map((s) => (
+                <Pressable
+                  key={s.id}
+                  onPress={() => setSelectedSchool(s)}
+                  style={[
+                    qstyles.schoolItem,
+                    selectedSchool?.id === s.id && qstyles.schoolItemActive,
+                  ]}
+                >
+                  <Text style={qstyles.schoolName}>{s.name}</Text>
+                  <Text style={qstyles.schoolCity}>{s.district}, {s.city}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Button
+              label="Kaydet ve Devam Et"
+              onPress={submit}
+              loading={loading}
+              style={{ marginTop: 12 }}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
@@ -519,4 +672,79 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: colors.border,
     backgroundColor: '#fff',
   },
+  addStudentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.primaryDark,
+    backgroundColor: colors.primarySoft,
+    marginTop: 12,
+  },
+  addStudentIcon: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: colors.dark,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    textAlign: 'center',
+    lineHeight: 34,
+  },
+  addStudentText: { fontSize: 14, fontWeight: '800', color: colors.dark },
+  addStudentSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+});
+
+const qstyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 32,
+  },
+  grabber: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#D1D5DB',
+    marginBottom: 14,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  title: { fontSize: 18, fontWeight: '800', color: colors.dark },
+  close: { fontSize: 20, color: colors.muted },
+  subLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: 6,
+  },
+  schoolItem: {
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 6,
+    backgroundColor: colors.card,
+  },
+  schoolItemActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primaryDark,
+  },
+  schoolName: { fontSize: 13, fontWeight: '700', color: colors.dark },
+  schoolCity: { fontSize: 11, color: colors.muted, marginTop: 2 },
 });

@@ -381,6 +381,24 @@ export class ParentsService {
     return saved;
   }
 
+  async updateStudent(
+    parentId: string,
+    studentId: string,
+    input: { name?: string; class?: string | null; schoolId?: string },
+  ) {
+    const s = await this.students.findOne({ where: { id: studentId, parentId } });
+    if (!s) throw new NotFoundException('Öğrenci bulunamadı');
+    if (input.name !== undefined) s.name = input.name;
+    if (input.class !== undefined) s.class = input.class;
+    if (input.schoolId !== undefined) {
+      const school = await this.schools.findOne({ where: { id: input.schoolId } });
+      if (!school) throw new BadRequestException('Geçersiz okul');
+      s.schoolId = input.schoolId;
+    }
+    await this.students.save(s);
+    return s;
+  }
+
   async removeStudent(parentId: string, studentId: string) {
     const s = await this.students.findOne({ where: { id: studentId, parentId } });
     if (!s) throw new NotFoundException();

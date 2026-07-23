@@ -40,6 +40,16 @@ export default function OgrencilerimScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState(false);
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
+
+  function openActions(item: Student) {
+    if (!item.isOwner) return;
+    Alert.alert(item.name, undefined, [
+      { text: 'Düzenle', onPress: () => setEditStudent(item) },
+      { text: 'Sil', style: 'destructive', onPress: () => removeStudent(item.id, item.name) },
+      { text: 'Vazgeç', style: 'cancel' },
+    ]);
+  }
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -109,7 +119,11 @@ export default function OgrencilerimScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={styles.card}>
+          <Pressable
+            onPress={() => item.isOwner && setEditStudent(item)}
+            onLongPress={() => openActions(item)}
+            style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
+          >
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
             </View>
@@ -121,11 +135,15 @@ export default function OgrencilerimScreen() {
               </Text>
             </View>
             {item.isOwner && (
-              <Pressable onPress={() => removeStudent(item.id, item.name)} hitSlop={8}>
-                <Text style={styles.remove}>✕</Text>
+              <Pressable
+                onPress={() => openActions(item)}
+                hitSlop={8}
+                style={styles.moreBtn}
+              >
+                <Text style={styles.moreText}>⋯</Text>
               </Pressable>
             )}
-          </View>
+          </Pressable>
         )}
       />
 
@@ -137,7 +155,132 @@ export default function OgrencilerimScreen() {
           await load();
         }}
       />
+
+      <EditStudentModal
+        student={editStudent}
+        onClose={() => setEditStudent(null)}
+        onDone={async () => {
+          setEditStudent(null);
+          await load();
+        }}
+      />
     </SafeAreaView>
+  );
+}
+
+function EditStudentModal({
+  student,
+  onClose,
+  onDone,
+}: {
+  student: Student | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { token } = useAuth();
+  const [name, setName] = useState('');
+  const [studentClass, setStudentClass] = useState('');
+  const [schools, setSchools] = useState<School[]>([]);
+  const [schoolQ, setSchoolQ] = useState('');
+  const [selectedSchool, setSelectedSchool] = useState<School | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!student) return;
+      setName(student.name);
+      setStudentClass(student.class ?? '');
+      setSelectedSchool(student.school as School | null);
+      setSchoolQ('');
+      (async () => {
+        try {
+          const s = await api.get<School[]>('/schools', token);
+          setSchools(s);
+        } catch {}
+      })();
+    }, [student, token]),
+  );
+
+  const filtered = schoolQ
+    ? schools.filter((s) => s.name.toLowerCase().includes(schoolQ.toLowerCase())).slice(0, 8)
+    : schools.slice(0, 8);
+
+  async function submit() {
+    if (!student) return;
+    if (!name.trim()) { setError('Ad soyad gir'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      await api.patch(
+        `/me/parent/students/${student.id}`,
+        {
+          name: name.trim(),
+          class: studentClass.trim() || null,
+          schoolId: selectedSchool?.id,
+        },
+        token,
+      );
+      onDone();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal visible={!!student} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={modalStyles.backdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ width: '100%' }}
+        >
+          <View style={modalStyles.sheet}>
+            <View style={modalStyles.grabber} />
+            <View style={modalStyles.headerRow}>
+              <Text style={modalStyles.title}>Öğrenciyi Düzenle</Text>
+              <Pressable onPress={onClose} hitSlop={12}>
+                <Text style={modalStyles.close}>✕</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" style={{ maxHeight: 480 }}>
+              <ErrorBanner message={error} />
+              <Input label="Ad Soyad" value={name} onChangeText={setName} />
+              <Input label="Sınıf" value={studentClass} onChangeText={setStudentClass} placeholder="Örn: 3. Sınıf" />
+
+              <Text style={modalStyles.subLabel}>Okul</Text>
+              <Input
+                value={schoolQ}
+                onChangeText={setSchoolQ}
+                placeholder={selectedSchool ? selectedSchool.name : 'Okul ara...'}
+              />
+              {filtered.map((s) => (
+                <Pressable
+                  key={s.id}
+                  onPress={() => setSelectedSchool(s)}
+                  style={[
+                    modalStyles.schoolItem,
+                    selectedSchool?.id === s.id && modalStyles.schoolItemActive,
+                  ]}
+                >
+                  <Text style={modalStyles.schoolName}>{s.name}</Text>
+                  <Text style={modalStyles.schoolCity}>{s.district}, {s.city}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Button
+              label="Kaydet"
+              onPress={submit}
+              loading={loading}
+              style={{ marginTop: 12 }}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
@@ -341,6 +484,15 @@ const styles = StyleSheet.create({
   classText: { fontSize: 11, color: colors.muted, marginTop: 2 },
   guest: { fontSize: 10, color: colors.blue, marginTop: 3, fontWeight: '700' },
   remove: { fontSize: 20, color: colors.muted, padding: 8 },
+  moreBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moreText: { fontSize: 20, color: colors.dark, fontWeight: '800', marginTop: -6 },
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
   emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },

@@ -47,6 +47,12 @@ export default function MenuScreen() {
       onPress: () => router.push('/(app)/servisci/belgelerim'),
     },
     {
+      label: 'Hizmet Bölgelerim',
+      desc: 'Talep almak istediğin il/ilçeler',
+      icon: <Path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 10a3 3 0 1 1 0-6 3 3 0 0 1 0 6z" />,
+      onPress: () => router.push('/(app)/servisci/bolgelerim'),
+    },
+    {
       label: 'Puanlarım',
       desc: 'Veli değerlendirmeleri',
       icon: <Path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z" />,

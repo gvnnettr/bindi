@@ -400,21 +400,21 @@ export class EnrollmentsService {
       if (previousStatus === 'submitted' || previousStatus === 'pending') {
         if (input.status === 'paid') {
           await this.notif.create({
-            userType: 'parent',
-            userId: payment.enrollment.parentId,
+            role: 'parent',
+            recipientId: payment.enrollment.parentId,
             type: 'payment.approved',
             title: 'Ödemeniz onaylandı ✅',
             body: `${payment.period} dönemi ${Number(payment.amount)}₺ ödemesi servisçi tarafından onaylandı.`,
-            metadata: { paymentId: payment.id, enrollmentId: payment.enrollmentId, period: payment.period },
+            link: `/veli/odemelerim`,
           });
         } else if (input.status === 'pending' && input.providerNote) {
           await this.notif.create({
-            userType: 'parent',
-            userId: payment.enrollment.parentId,
+            role: 'parent',
+            recipientId: payment.enrollment.parentId,
             type: 'payment.rejected',
             title: 'Dekont reddedildi ⚠️',
             body: `${payment.period} ödemesi: ${input.providerNote}. Lütfen yeni dekont yükleyin.`,
-            metadata: { paymentId: payment.id, enrollmentId: payment.enrollmentId, period: payment.period },
+            link: `/veli/odemelerim`,
           });
         }
       }

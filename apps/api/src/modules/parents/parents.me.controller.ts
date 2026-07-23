@@ -50,6 +50,11 @@ class AddStudentDto {
   @IsOptional() @IsString() class?: string;
   @IsString() schoolId!: string;
 }
+class UpdateStudentDto {
+  @IsOptional() @IsString() @Length(1, 120) name?: string;
+  @IsOptional() @IsString() class?: string;
+  @IsOptional() @IsString() schoolId?: string;
+}
 class CreateRequestDto {
   @IsArray() @ArrayMinSize(1) @IsString({ each: true }) studentIds!: string[];
   @IsString() city!: string;
@@ -148,6 +153,15 @@ export class ParentsMeController {
   @Post('students')
   addStudent(@Req() req: ParentRequest, @Body() dto: AddStudentDto) {
     return this.svc.addStudent(req.parent.id, dto);
+  }
+
+  @Patch('students/:id')
+  updateStudent(
+    @Req() req: ParentRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateStudentDto,
+  ) {
+    return this.svc.updateStudent(req.parent.id, id, dto);
   }
 
   @Delete('students/:id')
