@@ -60,13 +60,15 @@ export class ParentsService {
     private readonly notif: NotificationsService,
   ) {}
 
-  async check(phone: string): Promise<{ exists: boolean; hasPassword: boolean }> {
+  async check(phone: string): Promise<{ exists: boolean; hasAccount: boolean; hasPassword: boolean }> {
     const normalized = phone.replace(/\D/g, '').replace(/^90/, '').replace(/^([1-9])/, '0$1');
     const parent = await this.parents.findOne({
       where: [{ phone }, { phone: normalized }],
     });
+    const exists = !!parent;
     return {
-      exists: !!parent,
+      exists,
+      hasAccount: exists, // eski mobile build'lerle geriye dönük uyumluluk
       hasPassword: !!parent?.passwordHash,
     };
   }

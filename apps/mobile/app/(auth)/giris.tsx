@@ -96,7 +96,11 @@ export default function GirisScreen() {
     <View style={styles.container}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <LinearGradient
-          colors={['#FFE28A', colors.primary, '#E1A800']}
+          colors={
+            isProvider
+              ? ['#93C5FD', '#3B82F6', '#1E40AF']
+              : ['#FFE28A', colors.primary, '#E1A800']
+          }
           locations={[0, 0.5, 1]}
           start={{ x: 0.3, y: 0.25 }}
           end={{ x: 1, y: 1 }}
@@ -104,18 +108,26 @@ export default function GirisScreen() {
         >
           <SafeAreaView edges={['top']} style={styles.heroInner}>
             <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
-              <Text style={styles.backText}>←</Text>
+              <Text style={[styles.backText, isProvider && { color: '#fff' }]}>←</Text>
             </Pressable>
+            <View style={[styles.roleBadge, isProvider && styles.roleBadgeProvider]}>
+              <Text style={styles.roleBadgeIcon}>{isProvider ? '🚐' : '👨‍👩‍👧'}</Text>
+              <Text style={[styles.roleBadgeText, isProvider && { color: '#fff' }]}>
+                {isProvider ? 'SERVİSÇİ GİRİŞİ' : 'VELİ GİRİŞİ'}
+              </Text>
+            </View>
             <Image
               source={require('../../assets/bindi-logo.png')}
               style={styles.heroLogo}
               resizeMode="contain"
             />
-            <Text style={styles.heroTitle}>Hoş geldin</Text>
-            <Text style={styles.heroSub}>
+            <Text style={[styles.heroTitle, isProvider && { color: '#fff' }]}>
+              {isProvider ? 'Servisçi Paneli' : 'Hoş geldin'}
+            </Text>
+            <Text style={[styles.heroSub, isProvider && { color: 'rgba(255,255,255,0.85)' }]}>
               {isProvider
-                ? 'Panel şifrenle giriş yap'
-                : 'Telefon ve şifrenle giriş yap'}
+                ? 'Taleplere teklif vermek için giriş yap'
+                : 'Servis teklifleri için giriş yap'}
             </Text>
           </SafeAreaView>
         </LinearGradient>
@@ -193,7 +205,27 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   backText: { fontSize: 24, color: colors.dark, fontWeight: '600' },
-  heroLogo: { width: 220, height: 130, marginTop: 4 },
+  roleBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(31,41,55,0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 2,
+  },
+  roleBadgeProvider: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  roleBadgeIcon: { fontSize: 14 },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.dark,
+    letterSpacing: 1,
+  },
+  heroLogo: { width: 200, height: 110, marginTop: 2 },
   heroTitle: {
     fontSize: 24,
     fontWeight: '800',
