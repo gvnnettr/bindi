@@ -54,6 +54,7 @@ workflows:
           keychain initialize
           app-store-connect fetch-signing-files \
             "$BUNDLE_ID" \
+            --platform IOS \
             --type IOS_APP_ADHOC \
             --create
           keychain add-certificates
