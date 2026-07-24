@@ -61,6 +61,54 @@ class AdminUpdateDto {
   @IsOptional() @IsIn(['admin', 'super_admin']) role?: string;
 }
 
+// Admin adına yeni servisçi
+class AdminCreateProviderDto {
+  @IsString() @Length(10, 20) phone!: string;
+  @IsString() @Length(2, 200) companyName!: string;
+  @IsString() @Length(2, 120) ownerName!: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() taxNo?: string;
+  @IsOptional() @IsString() address?: string;
+  @IsOptional() @IsIn(['pending_approval', 'active']) status?: string;
+}
+
+// Admin adına yeni veli
+class AdminCreateParentDto {
+  @IsString() @Length(10, 20) phone!: string;
+  @IsString() @Length(2, 120) name!: string;
+  @IsOptional() @IsEmail() email?: string;
+}
+
+// Admin adına veli için öğrenci
+class AdminAddStudentDto {
+  @IsString() @Length(1, 120) name!: string;
+  @IsOptional() @IsString() class?: string;
+  @IsString() schoolId!: string;
+}
+
+// Araç DTO — servisçi adına
+class ProviderVehicleDto {
+  @IsString() @Length(1, 80) brand!: string;
+  @IsString() @Length(1, 120) model!: string;
+  @IsInt() @Min(1990) @Max(2100) year!: number;
+  @IsString() @Length(2, 20) plate!: string;
+  @IsInt() @Min(1) @Max(60) seats!: number;
+  @IsOptional() @IsString() photoUrl?: string;
+}
+
+// Şoför DTO
+class ProviderDriverDto {
+  @IsString() @Length(2, 120) name!: string;
+  @IsString() @Length(10, 20) phone!: string;
+  @IsOptional() @IsString() note?: string;
+}
+
+class UpdateParentDto {
+  @IsOptional() @IsString() @Length(2, 120) name?: string;
+  @IsOptional() @IsEmail() email?: string;
+  @IsOptional() @IsString() @Length(10, 20) phone?: string;
+}
+
 @UseGuards(AdminJwtGuard)
 @Controller('admin')
 export class AdminController {
@@ -288,6 +336,100 @@ export class AdminController {
   @Delete('providers/:id')
   deleteProvider(@Param('id') id: string) {
     return this.svc.deleteProvider(id);
+  }
+
+  // ================== ADMIN SÜPER KULLANICI ENDPOINT'LERİ ==================
+
+  /**
+   * Admin adına yeni servisçi oluşturur.
+   * PIN random üretilir, telefona SMS gider, ilk girişte değiştirmesi zorunlu.
+   */
+  @Post('providers')
+  createProvider(@Body() dto: AdminCreateProviderDto) {
+    return this.svc.adminCreateProvider(dto);
+  }
+
+  /** Servisçi için admin adına araç ekle */
+  @Post('providers/:id/vehicles')
+  addProviderVehicle(@Param('id') id: string, @Body() dto: ProviderVehicleDto) {
+    return this.svc.adminAddVehicle(id, dto);
+  }
+  /** Servisçi için admin adına araç sil */
+  @Delete('providers/:id/vehicles/:vehicleId')
+  removeProviderVehicle(
+    @Param('id') id: string,
+    @Param('vehicleId') vehicleId: string,
+  ) {
+    return this.svc.adminRemoveVehicle(id, vehicleId);
+  }
+
+  /** Servisçi için admin adına şoför ekle */
+  @Post('providers/:id/drivers')
+  addProviderDriver(@Param('id') id: string, @Body() dto: ProviderDriverDto) {
+    return this.svc.adminAddDriver(id, dto);
+  }
+  /** Servisçi için admin adına şoför sil */
+  @Delete('providers/:id/drivers/:driverId')
+  removeProviderDriver(
+    @Param('id') id: string,
+    @Param('driverId') driverId: string,
+  ) {
+    return this.svc.adminRemoveDriver(id, driverId);
+  }
+
+  /** Servisçinin PIN'ini sıfırla + SMS gönder */
+  @Post('providers/:id/reset-password')
+  resetProviderPassword(@Param('id') id: string) {
+    return this.svc.adminResetProviderPassword(id);
+  }
+
+  // ---- Veli yönetimi ----
+
+  /** Tüm veliler + arama */
+  @Get('parents')
+  listParents(@Query('q') q?: string) {
+    return this.svc.listParents(q);
+  }
+
+  /** Veli detay: bilgiler + öğrenciler + talepler + ödemeler */
+  @Get('parents/:id')
+  parentDetail(@Param('id') id: string) {
+    return this.svc.getParentDetail(id);
+  }
+
+  /** Admin adına yeni veli oluştur */
+  @Post('parents')
+  createParent(@Body() dto: AdminCreateParentDto) {
+    return this.svc.adminCreateParent(dto);
+  }
+
+  /** Veli bilgi güncelle */
+  @Patch('parents/:id')
+  updateParent(@Param('id') id: string, @Body() dto: UpdateParentDto) {
+    return this.svc.adminUpdateParent(id, dto);
+  }
+
+  @Delete('parents/:id')
+  deleteParent(@Param('id') id: string) {
+    return this.svc.adminDeleteParent(id);
+  }
+
+  /** Veli için öğrenci ekle */
+  @Post('parents/:id/students')
+  addParentStudent(@Param('id') id: string, @Body() dto: AdminAddStudentDto) {
+    return this.svc.adminAddStudentForParent(id, dto);
+  }
+
+  /** Velinin PIN'ini sıfırla + SMS */
+  @Post('parents/:id/reset-password')
+  resetParentPassword(@Param('id') id: string) {
+    return this.svc.adminResetParentPassword(id);
+  }
+
+  /** Talebi yenile: mevcut pending teklifleri iptal et, matching yeniden çalışsın */
+  @Post('requests/:id/refresh')
+  refreshRequest(@Param('id') id: string) {
+    return this.svc.adminRefreshRequest(id);
   }
 
   @Get('schools')

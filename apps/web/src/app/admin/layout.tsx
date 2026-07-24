@@ -29,6 +29,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const nav: NavItem[] = [
     { href: '/admin', label: 'Panel', icon: Icons.Dashboard },
     { href: '/admin/servisciler', label: 'Servisçiler', icon: Icons.Users },
+    { href: '/admin/veliler', label: 'Veliler', icon: Icons.Users },
     { href: '/admin/talepler', label: 'Talepler', icon: Icons.Inbox },
     { href: '/admin/okullar', label: 'Okullar', icon: Icons.School },
     { href: '/admin/sehirler', label: 'Şehirler', icon: Icons.School },

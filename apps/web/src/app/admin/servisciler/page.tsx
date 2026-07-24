@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiGet, apiPost } from '@/lib/api';
 import { adminSession } from '@/lib/session';
-import { Button } from '@/components/ui';
+import { Button, Field, Input } from '@/components/ui';
 
 interface Provider {
   id: string;
@@ -57,6 +57,8 @@ export default function AdminProvidersPage() {
     }
   }
 
+  const [showNewModal, setShowNewModal] = useState(false);
+
   return (
     <div className="space-y-6">
       {error && (
@@ -65,19 +67,26 @@ export default function AdminProvidersPage() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 border-b border-charcoal-200">
-        <TabButton active={tab === 'pending'} onClick={() => setTab('pending')}>
-          Onay Bekleyenler
-          {pending.length > 0 && (
-            <span className="ml-2 rounded-full bg-sunset-500 px-2 py-0.5 text-[10px] font-bold text-white">
-              {pending.length}
-            </span>
-          )}
-        </TabButton>
-        <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
-          Tümü ({all.length})
-        </TabButton>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 border-b border-charcoal-200 flex-1">
+          <TabButton active={tab === 'pending'} onClick={() => setTab('pending')}>
+            Onay Bekleyenler
+            {pending.length > 0 && (
+              <span className="ml-2 rounded-full bg-sunset-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                {pending.length}
+              </span>
+            )}
+          </TabButton>
+          <TabButton active={tab === 'all'} onClick={() => setTab('all')}>
+            Tümü ({all.length})
+          </TabButton>
+        </div>
+        <Button onClick={() => setShowNewModal(true)}>+ Yeni Servisçi</Button>
       </div>
+
+      {showNewModal && (
+        <NewProviderModal onClose={() => setShowNewModal(false)} onDone={() => { setShowNewModal(false); load(); }} />
+      )}
 
       {tab === 'pending' ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -211,4 +220,110 @@ function StatusPill({ status }: { status: string }) {
   };
   const m = map[status] ?? { cls: 'badge-neutral', label: status };
   return <span className={m.cls}>{m.label}</span>;
+}
+
+function NewProviderModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [phone, setPhone] = useState('');
+  const [companyName, setCompanyName] = useState('');
+  const [ownerName, setOwnerName] = useState('');
+  const [email, setEmail] = useState('');
+  const [status, setStatus] = useState<'pending_approval' | 'active'>('pending_approval');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ generatedPassword: string; companyName: string; phone: string } | null>(null);
+
+  async function submit() {
+    if (!phone.trim() || !companyName.trim() || !ownerName.trim()) {
+      setError('Telefon, firma adı ve sahip adı zorunlu'); return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const token = adminSession.get();
+      if (!token) throw new Error('Oturum yok');
+      const r = await apiPost<any>('/admin/providers', {
+        phone: phone.trim(),
+        companyName: companyName.trim(),
+        ownerName: ownerName.trim(),
+        email: email.trim() || undefined,
+        status,
+      }, token);
+      setResult({ generatedPassword: r.generatedPassword, companyName: r.companyName, phone: r.phone });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (result) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="w-full max-w-md rounded-xl bg-white p-6 space-y-4">
+          <div className="text-center">
+            <div className="text-4xl">✅</div>
+            <h2 className="text-xl font-bold mt-2">Servisçi oluşturuldu</h2>
+            <p className="text-sm text-charcoal-500 mt-1">{result.companyName}</p>
+          </div>
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+            <div className="text-xs font-bold text-amber-900 uppercase">Otomatik PIN</div>
+            <div className="text-3xl font-mono font-bold text-charcoal-900 tracking-widest mt-1">
+              {result.generatedPassword}
+            </div>
+            <div className="text-xs text-amber-800 mt-2">
+              📱 Bu PIN {result.phone} numarasına SMS ile gönderildi.
+              Servisçi ilk girişte kendi PIN'ini belirleyecek.
+            </div>
+          </div>
+          <Button onClick={onDone} className="w-full">Tamam</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 space-y-4">
+        <div className="flex items-start justify-between">
+          <h2 className="text-xl font-bold text-charcoal-900">Yeni Servisçi Ekle</h2>
+          <button onClick={onClose} className="text-charcoal-400 text-xl">✕</button>
+        </div>
+        {error && (
+          <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">{error}</div>
+        )}
+        <Field label="Telefon *">
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XX XXX XX XX" />
+        </Field>
+        <Field label="Firma Adı *">
+          <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Örn: Yıldız Servis Ltd." />
+        </Field>
+        <Field label="Sahip Adı *">
+          <Input value={ownerName} onChange={(e) => setOwnerName(e.target.value)} placeholder="Örn: Ali Yıldız" />
+        </Field>
+        <Field label="E-posta">
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="firma@mail.com" />
+        </Field>
+        <Field label="Durum">
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as any)}
+            className="w-full rounded-lg border border-charcoal-200 px-3 py-2 text-sm bg-white"
+          >
+            <option value="pending_approval">Onay Bekliyor (belge yüklenmesini bekle)</option>
+            <option value="active">Direkt Aktif (belge zorunlu değil)</option>
+          </select>
+        </Field>
+        <div className="text-xs text-charcoal-500 border-t border-charcoal-100 pt-3">
+          Otomatik 6 rakamlı PIN oluşturulup telefonuna SMS ile gönderilir. Servisçi
+          ilk girişte kendi PIN'ini belirleyebilir.
+        </div>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1">Vazgeç</Button>
+          <Button onClick={submit} disabled={loading} className="flex-1">
+            {loading ? 'Oluşturuluyor...' : 'Oluştur & SMS Gönder'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -18,7 +18,14 @@ import {
   Driver,
   DriverDocument,
   AdminActivityLog,
+  Student,
+  StudentGuardian,
+  Enrollment,
+  Payment,
+  RequestStudent,
 } from '@servis/db';
+import { MatchingService } from '../requests/matching.service';
+import { RequestsModule } from '../requests/requests.module';
 import { AdminAuthController } from './admin.auth.controller';
 import { AdminController } from './admin.controller';
 import { AdminSettingsController } from './admin.settings.controller';
@@ -46,7 +53,13 @@ import { AdminJwtGuard } from './admin-jwt.guard';
       Driver,
       DriverDocument,
       AdminActivityLog,
+      Student,
+      StudentGuardian,
+      Enrollment,
+      Payment,
+      RequestStudent,
     ]),
+    RequestsModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({

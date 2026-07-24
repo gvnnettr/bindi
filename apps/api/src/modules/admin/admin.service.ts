@@ -27,10 +27,17 @@ import {
   Driver,
   DriverDocument,
   AdminActivityLog,
+  Student,
+  StudentGuardian,
+  Enrollment,
+  Payment,
+  RequestStudent,
 } from '@servis/db';
-import { PROVIDER_STATUS } from '@servis/shared';
+import { PROVIDER_STATUS, OFFER_STATUS, REQUEST_STATUS } from '@servis/shared';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsService } from '../sms/sms.service';
+import { MatchingService } from '../requests/matching.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class AdminService {
@@ -63,9 +70,15 @@ export class AdminService {
     private readonly driverDocs: Repository<DriverDocument>,
     @InjectRepository(AdminActivityLog)
     private readonly activityLog: Repository<AdminActivityLog>,
+    @InjectRepository(Student) private readonly students: Repository<Student>,
+    @InjectRepository(StudentGuardian) private readonly guardians: Repository<StudentGuardian>,
+    @InjectRepository(Enrollment) private readonly enrollments: Repository<Enrollment>,
+    @InjectRepository(Payment) private readonly payments: Repository<Payment>,
+    @InjectRepository(RequestStudent) private readonly requestStudents: Repository<RequestStudent>,
     private readonly jwt: JwtService,
     private readonly notif: NotificationsService,
     private readonly sms: SmsService,
+    private readonly matching: MatchingService,
   ) {}
 
   async login(email: string, password: string) {
@@ -1470,6 +1483,350 @@ export class AdminService {
       meta: r.meta,
       createdAt: r.createdAt,
     }));
+  }
+
+  // ==================== ADMIN SÜPER KULLANICI METODLARI ====================
+
+  private normalizePhone(phone: string): string {
+    return phone.replace(/\D/g, '').replace(/^90/, '').replace(/^([1-9])/, '0$1');
+  }
+
+  /** Admin adına yeni servisçi + SMS ile PIN */
+  async adminCreateProvider(input: {
+    phone: string;
+    companyName: string;
+    ownerName: string;
+    email?: string;
+    taxNo?: string;
+    address?: string;
+    status?: string;
+  }) {
+    const phone = this.normalizePhone(input.phone);
+    const existing = await this.providers.findOne({ where: { phone } });
+    if (existing) {
+      throw new BadRequestException('Bu telefonda zaten servisçi hesabı var');
+    }
+    const password = generateSimplePassword();
+    const passwordHash = await argon2.hash(password);
+    const provider = this.providers.create({
+      phone,
+      companyName: input.companyName,
+      ownerName: input.ownerName,
+      email: input.email ?? null,
+      taxNo: input.taxNo ?? null,
+      address: input.address ?? null,
+      status: (input.status ?? 'pending_approval') as any,
+      passwordHash,
+      mustChangePassword: true,
+    });
+    const saved = await this.providers.save(provider);
+
+    // SMS gönder
+    try {
+      await this.sms.send(
+        phone,
+        `Bindi Servisci hesabiniz olusturuldu. Giris PIN'iniz: ${password} - Uygulamayi indirin: bindi.com.tr`,
+      );
+    } catch {}
+
+    return { ...saved, generatedPassword: password };
+  }
+
+  /** Servisçi için admin adına araç ekle */
+  async adminAddVehicle(providerId: string, v: {
+    brand: string; model: string; year: number; plate: string; seats: number; photoUrl?: string;
+  }) {
+    const p = await this.providers.findOne({ where: { id: providerId } });
+    if (!p) throw new NotFoundException('Servisçi bulunamadı');
+    const vehicle = this.vehicles.create({
+      providerId,
+      brand: v.brand,
+      model: v.model,
+      year: v.year,
+      plate: v.plate,
+      seats: v.seats,
+      photoUrl: v.photoUrl ?? null,
+    });
+    return this.vehicles.save(vehicle);
+  }
+
+  async adminRemoveVehicle(providerId: string, vehicleId: string) {
+    const v = await this.vehicles.findOne({ where: { id: vehicleId, providerId } });
+    if (!v) throw new NotFoundException('Araç bulunamadı');
+    await this.vehicles.delete(vehicleId);
+    return { ok: true };
+  }
+
+  /** Servisçi için admin adına şoför ekle */
+  async adminAddDriver(providerId: string, d: {
+    name: string; phone: string; note?: string;
+  }) {
+    const p = await this.providers.findOne({ where: { id: providerId } });
+    if (!p) throw new NotFoundException('Servisçi bulunamadı');
+    const driver = this.drivers.create({
+      providerId,
+      name: d.name,
+      phone: this.normalizePhone(d.phone),
+      note: d.note ?? null,
+    });
+    return this.drivers.save(driver);
+  }
+
+  async adminRemoveDriver(providerId: string, driverId: string) {
+    const d = await this.drivers.findOne({ where: { id: driverId, providerId } });
+    if (!d) throw new NotFoundException('Şoför bulunamadı');
+    await this.drivers.delete(driverId);
+    return { ok: true };
+  }
+
+  /** Servisçi PIN sıfırla + SMS */
+  async adminResetProviderPassword(providerId: string) {
+    const p = await this.providers.findOne({ where: { id: providerId } });
+    if (!p) throw new NotFoundException('Servisçi bulunamadı');
+    const password = generateSimplePassword();
+    p.passwordHash = await argon2.hash(password);
+    p.mustChangePassword = true;
+    await this.providers.save(p);
+    try {
+      await this.sms.send(
+        p.phone,
+        `Bindi PIN'iniz sifirlandi. Yeni PIN: ${password} - Ilk giriste degistirin.`,
+      );
+    } catch {}
+    return { ok: true, generatedPassword: password };
+  }
+
+  // -------- VELİ YÖNETİMİ --------
+
+  async listParents(search?: string) {
+    const q = this.parents.createQueryBuilder('p')
+      .orderBy('p.createdAt', 'DESC')
+      .limit(200);
+    if (search && search.trim()) {
+      const s = `%${search.trim()}%`;
+      q.where('p.name ILIKE :s OR p.phone ILIKE :s OR p.email ILIKE :s', { s });
+    }
+    const rows = await q.getMany();
+    // Her veli için özet istatistikler
+    const parentIds = rows.map((p) => p.id);
+    if (parentIds.length === 0) return [];
+    const stCounts: Array<{ parent_id: string; c: string }> = await this.students
+      .createQueryBuilder('s')
+      .select('s.parent_id', 'parent_id')
+      .addSelect('COUNT(*)', 'c')
+      .where('s.parent_id IN (:...ids)', { ids: parentIds })
+      .groupBy('s.parent_id')
+      .getRawMany();
+    const stMap = new Map(stCounts.map((r) => [r.parent_id, Number(r.c)]));
+    const reqCounts: Array<{ parent_id: string; c: string }> = await this.requests
+      .createQueryBuilder('r')
+      .select('r.parent_id', 'parent_id')
+      .addSelect('COUNT(*)', 'c')
+      .where('r.parent_id IN (:...ids)', { ids: parentIds })
+      .groupBy('r.parent_id')
+      .getRawMany();
+    const reqMap = new Map(reqCounts.map((r) => [r.parent_id, Number(r.c)]));
+    return rows.map((p) => ({
+      id: p.id,
+      phone: p.phone,
+      name: p.name,
+      email: p.email,
+      createdAt: p.createdAt,
+      hasPassword: !!p.passwordHash,
+      studentCount: stMap.get(p.id) ?? 0,
+      requestCount: reqMap.get(p.id) ?? 0,
+    }));
+  }
+
+  async getParentDetail(parentId: string) {
+    const p = await this.parents.findOne({ where: { id: parentId } });
+    if (!p) throw new NotFoundException('Veli bulunamadı');
+    const studentList = await this.students.find({
+      where: { parentId },
+      relations: ['school'],
+    });
+    const reqs = await this.requests.find({
+      where: { parentId },
+      relations: [
+        'requestStudents',
+        'requestStudents.student',
+        'offers',
+        'offers.provider',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+    const enrs = await this.enrollments.find({
+      where: { parentId },
+      relations: ['student', 'provider'],
+    });
+    const enrIds = enrs.map((e) => e.id);
+    const pays = enrIds.length > 0
+      ? await this.payments
+          .createQueryBuilder('p')
+          .where('p.enrollment_id IN (:...ids)', { ids: enrIds })
+          .orderBy('p.due_date', 'DESC')
+          .getMany()
+      : [];
+    return {
+      parent: {
+        id: p.id, phone: p.phone, name: p.name, email: p.email,
+        createdAt: p.createdAt, hasPassword: !!p.passwordHash,
+      },
+      students: studentList.map((s) => ({
+        id: s.id, name: s.name, class: s.class,
+        school: s.school ? { id: s.school.id, name: s.school.name, city: s.school.city, district: s.school.district } : null,
+      })),
+      requests: reqs.map((r) => ({
+        id: r.id, status: r.status, city: r.city, district: r.district,
+        neighborhood: r.neighborhood, address: r.address, createdAt: r.createdAt,
+        studentNames: r.requestStudents.map((rs) => rs.student?.name).filter(Boolean),
+        offerCount: r.offers.length,
+        selectedOffer: r.offers.find((o) => o.status === 'selected')
+          ? {
+              price: r.offers.find((o) => o.status === 'selected')!.monthlyPrice,
+              providerName: r.offers.find((o) => o.status === 'selected')!.provider?.companyName,
+            }
+          : null,
+      })),
+      enrollments: enrs.map((e) => ({
+        id: e.id, status: e.status, monthlyPrice: e.monthlyPrice,
+        student: { id: e.student.id, name: e.student.name },
+        provider: { id: e.provider.id, name: e.provider.companyName },
+      })),
+      payments: pays.map((p2) => ({
+        id: p2.id, enrollmentId: p2.enrollmentId, period: p2.period,
+        amount: Number(p2.amount), status: p2.status, dueDate: p2.dueDate,
+        paidAt: p2.paidAt, receiptUrl: p2.receiptUrl,
+      })),
+    };
+  }
+
+  async adminCreateParent(input: { phone: string; name: string; email?: string }) {
+    const phone = this.normalizePhone(input.phone);
+    const existing = await this.parents.findOne({ where: { phone } });
+    if (existing) {
+      throw new BadRequestException('Bu telefonda zaten veli hesabı var');
+    }
+    const password = generateSimplePassword();
+    const passwordHash = await argon2.hash(password);
+    const parent = this.parents.create({
+      phone,
+      name: input.name,
+      email: input.email ?? null,
+      passwordHash,
+    });
+    const saved = await this.parents.save(parent);
+    try {
+      await this.sms.send(
+        phone,
+        `Bindi hesabiniz olusturuldu. Giris PIN'iniz: ${password} - Uygulamayi indirin: bindi.com.tr`,
+      );
+    } catch {}
+    return { ...saved, generatedPassword: password };
+  }
+
+  async adminUpdateParent(parentId: string, input: { name?: string; email?: string; phone?: string }) {
+    const p = await this.parents.findOne({ where: { id: parentId } });
+    if (!p) throw new NotFoundException('Veli bulunamadı');
+    if (input.name !== undefined) p.name = input.name;
+    if (input.email !== undefined) p.email = input.email || null;
+    if (input.phone !== undefined) p.phone = this.normalizePhone(input.phone);
+    return this.parents.save(p);
+  }
+
+  async adminDeleteParent(parentId: string) {
+    const p = await this.parents.findOne({ where: { id: parentId } });
+    if (!p) throw new NotFoundException('Veli bulunamadı');
+    await this.parents.delete(parentId);
+    return { ok: true };
+  }
+
+  async adminAddStudentForParent(parentId: string, input: {
+    name: string; class?: string; schoolId: string;
+  }) {
+    const p = await this.parents.findOne({ where: { id: parentId } });
+    if (!p) throw new NotFoundException('Veli bulunamadı');
+    const s = this.schools.findOne({ where: { id: input.schoolId } });
+    if (!s) throw new BadRequestException('Okul bulunamadı');
+    const student = this.students.create({
+      parentId,
+      name: input.name,
+      class: input.class ?? null,
+      schoolId: input.schoolId,
+    });
+    const saved = await this.students.save(student);
+    await this.guardians.save(
+      this.guardians.create({
+        studentId: saved.id, parentId, relation: 'primary', isPrimary: true,
+      }),
+    );
+    return saved;
+  }
+
+  async adminResetParentPassword(parentId: string) {
+    const p = await this.parents.findOne({ where: { id: parentId } });
+    if (!p) throw new NotFoundException('Veli bulunamadı');
+    const password = generateSimplePassword();
+    p.passwordHash = await argon2.hash(password);
+    await this.parents.save(p);
+    try {
+      await this.sms.send(
+        p.phone,
+        `Bindi PIN'iniz sifirlandi. Yeni PIN: ${password}`,
+      );
+    } catch {}
+    return { ok: true, generatedPassword: password };
+  }
+
+  /** Talep yenile: mevcut pending offers'ları rejected yap, matching yeniden çalıştır */
+  async adminRefreshRequest(requestId: string) {
+    const r = await this.requests.findOne({
+      where: { id: requestId },
+      relations: ['requestStudents', 'requestStudents.student'],
+    });
+    if (!r) throw new NotFoundException('Talep bulunamadı');
+    // Pending teklifleri iptal et
+    await this.offers.update(
+      { requestId, status: OFFER_STATUS.PENDING as any },
+      { status: OFFER_STATUS.REJECTED as any },
+    );
+    // Status open'a çevir (kapalıysa)
+    if (r.status !== REQUEST_STATUS.OPEN) {
+      r.status = REQUEST_STATUS.OPEN as any;
+      await this.requests.save(r);
+    }
+    // Matching yeniden çalıştır + notify
+    const schoolIds = Array.from(
+      new Set(r.requestStudents.map((rs) => rs.student?.schoolId).filter(Boolean) as string[]),
+    );
+    const providers = await this.matching.findMatchingProviders({
+      schoolIds,
+      city: r.city,
+      district: r.district,
+      latitude: r.latitude,
+      longitude: r.longitude,
+    });
+    for (const p of providers) {
+      try {
+        await this.sms.send(
+          p.phone,
+          `Bindi: ${r.city}/${r.district} talebi yenilendi. Teklif verebilirsiniz.`,
+        );
+      } catch {}
+    }
+    if (providers.length > 0) {
+      await this.notif.createMany(
+        providers.map((p) => ({
+          role: 'provider' as const,
+          recipientId: p.id,
+          type: 'request.refreshed',
+          title: 'Talep yenilendi',
+          body: `${r.city}/${r.district} — admin talebi yeniden açtı, teklif verebilirsin.`,
+          link: `/servisci/talepler/${r.id}`,
+        })),
+      );
+    }
+    return { ok: true, notifiedProviders: providers.length };
   }
 }
 

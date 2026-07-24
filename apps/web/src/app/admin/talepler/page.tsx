@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiGet } from '@/lib/api';
+import { apiGet, apiPost } from '@/lib/api';
 import { adminSession } from '@/lib/session';
 import { formatPhone } from '@/components/Contact';
 
@@ -31,11 +31,30 @@ interface Req {
 export default function AdminRequestsPage() {
   const [rows, setRows] = useState<Req[]>([]);
   const router = useRouter();
-  useEffect(() => {
+
+  async function load() {
     const token = adminSession.get();
     if (!token) return;
-    apiGet<Req[]>('/admin/requests', token).then(setRows).catch(() => {});
-  }, []);
+    try {
+      const r = await apiGet<Req[]>('/admin/requests', token);
+      setRows(r);
+    } catch {}
+  }
+  useEffect(() => { load(); }, []);
+
+  async function refreshRequest(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm('Bu talep yenilensin mi? Mevcut bekleyen teklifler iptal edilir, servisçilere tekrar SMS + bildirim gider.')) return;
+    try {
+      const token = adminSession.get();
+      if (!token) return;
+      const r = await apiPost<{ notifiedProviders: number }>(`/admin/requests/${id}/refresh`, {}, token);
+      alert(`Talep yenilendi. ${r.notifiedProviders} servisçiye bildirim gitti.`);
+      await load();
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -60,6 +79,7 @@ export default function AdminRequestsPage() {
               <th className="px-6 py-3">Seçilen Servisçi</th>
               <th className="px-6 py-3 text-right">Ücret</th>
               <th className="px-6 py-3">Tarih</th>
+              <th className="px-6 py-3">İşlem</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-charcoal-100">
@@ -124,11 +144,21 @@ export default function AdminRequestsPage() {
                     </div>
                   )}
                 </td>
+                <td className="px-6 py-4">
+                  {r.status === 'open' && (
+                    <button
+                      onClick={(e) => refreshRequest(r.id, e)}
+                      className="text-xs font-bold text-sunset-600 hover:underline"
+                    >
+                      🔄 Yenile
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-16 text-center text-sm text-charcoal-500">
+                <td colSpan={7} className="py-16 text-center text-sm text-charcoal-500">
                   Henüz talep yok.
                 </td>
               </tr>
