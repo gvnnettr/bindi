@@ -75,7 +75,9 @@ export default function AraclarimScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={{ width: 32 }} />
+        <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 32 }}>
+          <Text style={{ fontSize: 28, color: colors.dark, fontWeight: '600' }}>‹</Text>
+        </Pressable>
         <Text style={styles.headerTitle}>Araçlarım</Text>
         <Pressable onPress={() => setModal('new')} style={styles.addBtn} hitSlop={8}>
           <Text style={styles.addBtnText}>+</Text>

@@ -50,7 +50,7 @@ export default function ServisciAnaSayfa() {
     if (!token) return;
     try {
       const [m, d] = await Promise.all([
-        api.get<ProviderMe>('/me/provider', token),
+        api.get<ProviderMe>('/me', token),
         api.get<Dashboard>('/me/dashboard', token).catch(() => null),
       ]);
       setMe(m);

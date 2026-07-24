@@ -37,7 +37,7 @@ export default function ServisciOnayBekleniyorScreen() {
   const checkStatus = useCallback(async () => {
     if (!token) return;
     try {
-      const me = await api.get<MeResp>('/me/provider', token);
+      const me = await api.get<MeResp>('/me', token);
       setCompanyName(me.companyName);
       if (me.status === 'active') {
         // Onaylandı → ana ekrana

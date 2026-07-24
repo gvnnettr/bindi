@@ -168,7 +168,9 @@ export default function ServisScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <View style={{ width: 32 }} />
+        <Pressable onPress={() => router.back()} hitSlop={12} style={{ width: 32 }}>
+          <Text style={{ fontSize: 28, color: colors.dark, fontWeight: '600' }}>‹</Text>
+        </Pressable>
         <Text style={styles.headerTitle}>Servis</Text>
         <View style={{ width: 32 }} />
       </View>
