@@ -9,11 +9,16 @@ export class SchoolsController {
     @InjectRepository(School) private readonly schools: Repository<School>,
   ) {}
 
-  @Get('public')
+  @Get()
   list() {
     return this.schools.find({
       where: { active: true },
       order: { city: 'ASC', name: 'ASC' },
     });
+  }
+
+  @Get('public')
+  listPublic() {
+    return this.list();
   }
 }

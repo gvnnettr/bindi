@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -431,17 +431,17 @@ function QuickAddStudentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!visible) return;
-      (async () => {
-        try {
-          const s = await api.get<QuickSchool[]>('/schools', token);
-          setSchools(s);
-        } catch {}
-      })();
-    }, [visible, token]),
-  );
+  useEffect(() => {
+    if (!visible) return;
+    (async () => {
+      try {
+        const s = await api.get<QuickSchool[]>('/schools', token);
+        setSchools(s);
+      } catch (e) {
+        setError('Okullar yüklenemedi: ' + (e instanceof ApiError ? e.message : (e as Error).message));
+      }
+    })();
+  }, [visible, token]);
 
   const filtered = schoolQ
     ? schools.filter((s) => s.name.toLowerCase().includes(schoolQ.toLowerCase())).slice(0, 8)

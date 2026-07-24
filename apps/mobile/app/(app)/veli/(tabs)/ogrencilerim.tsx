@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -186,21 +186,21 @@ function EditStudentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!student) return;
-      setName(student.name);
-      setStudentClass(student.class ?? '');
-      setSelectedSchool(student.school as School | null);
-      setSchoolQ('');
-      (async () => {
-        try {
-          const s = await api.get<School[]>('/schools', token);
-          setSchools(s);
-        } catch {}
-      })();
-    }, [student, token]),
-  );
+  useEffect(() => {
+    if (!student) return;
+    setName(student.name);
+    setStudentClass(student.class ?? '');
+    setSelectedSchool(student.school as School | null);
+    setSchoolQ('');
+    (async () => {
+      try {
+        const s = await api.get<School[]>('/schools', token);
+        setSchools(s);
+      } catch (e) {
+        setError('Okullar yüklenemedi: ' + (e instanceof ApiError ? e.message : (e as Error).message));
+      }
+    })();
+  }, [student, token]);
 
   const filtered = schoolQ
     ? schools.filter((s) => s.name.toLowerCase().includes(schoolQ.toLowerCase())).slice(0, 8)
@@ -304,17 +304,17 @@ function AddStudentModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (!visible) return;
-      (async () => {
-        try {
-          const s = await api.get<School[]>('/schools', token);
-          setSchools(s);
-        } catch {}
-      })();
-    }, [visible, token]),
-  );
+  useEffect(() => {
+    if (!visible) return;
+    (async () => {
+      try {
+        const s = await api.get<School[]>('/schools', token);
+        setSchools(s);
+      } catch (e) {
+        setError('Okullar yüklenemedi: ' + (e instanceof ApiError ? e.message : (e as Error).message));
+      }
+    })();
+  }, [visible, token]);
 
   const filtered = schoolQ
     ? schools.filter((s) => s.name.toLowerCase().includes(schoolQ.toLowerCase())).slice(0, 8)
