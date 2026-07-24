@@ -13,6 +13,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.gvn.bindi",
       "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "aps-environment": "production"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
