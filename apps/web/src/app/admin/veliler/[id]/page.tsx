@@ -163,7 +163,7 @@ export default function AdminParentDetailPage() {
               onClick={() => setShowAddRequest(true)}
               className="text-sm font-bold text-sunset-600 hover:underline"
             >
-              + Admin Adına Talep Aç
+              + Veli Adına Talep Aç
             </button>
           ) : null
         }
@@ -399,8 +399,11 @@ function AddRequestModal({
       <div className="w-full max-w-lg rounded-xl bg-white p-6 space-y-3 max-h-[92vh] overflow-y-auto">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-xl font-bold text-charcoal-900">Admin Adına Talep Aç</h2>
-            <p className="text-xs text-charcoal-500 mt-1">Veli için talep oluştur, servisçilere SMS + push gider</p>
+            <h2 className="text-xl font-bold text-charcoal-900">Veli Adına Talep Aç</h2>
+            <p className="text-xs text-charcoal-500 mt-1">
+              Bu talep velinin kendi hesabında görünür — destek personeli olarak yardım ediyorsun.
+              Servisçilere SMS + push gider.
+            </p>
           </div>
           <button onClick={onClose} className="text-charcoal-400 text-xl">✕</button>
         </div>
