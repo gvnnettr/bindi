@@ -85,6 +85,14 @@ export default function ServisciAnaSayfa() {
         style={styles.hero}
       >
         <SafeAreaView edges={['top']} style={styles.heroInner}>
+          <View style={styles.brandRow}>
+            <Image
+              source={require('../../../../assets/bindi-logo.png')}
+              style={styles.brandLogo}
+              resizeMode="contain"
+            />
+            <NotificationBell color="#fff" />
+          </View>
           <View style={styles.heroTopRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroGreet}>Merhaba,</Text>
@@ -92,7 +100,6 @@ export default function ServisciAnaSayfa() {
                 {me?.companyName ?? '—'}
               </Text>
             </View>
-            <NotificationBell color="#fff" />
           </View>
 
           {/* KPI row */}
@@ -247,6 +254,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   hero: { paddingBottom: 20 },
   heroInner: { paddingHorizontal: 20, paddingTop: 8 },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  brandLogo: { width: 96, height: 32 },
   heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
