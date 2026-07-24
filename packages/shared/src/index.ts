@@ -98,6 +98,10 @@ export const SETTINGS_KEYS = {
 
   // Rekabet / fiyat kontrolü
   OFFER_MIN_PRICE_PER_KM: 'offer.min_price_per_km', // TL per km (default: 500)
+
+  // Sezon (okul yılı)
+  SEASON_START_MONTH: 'season.start_month', // 1-12, default 9 (Eylül)
+  SEASON_END_MONTH: 'season.end_month',     // 1-12, default 6 (Haziran)
 } as const;
 
 export type SettingsKey =

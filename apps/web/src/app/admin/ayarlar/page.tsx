@@ -6,7 +6,7 @@ import { adminSession } from '@/lib/session';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 
 type Values = Record<string, string>;
-type Tab = 'site' | 'sms' | 'mail' | 'bank' | 'rekabet';
+type Tab = 'site' | 'sms' | 'mail' | 'bank' | 'rekabet' | 'sezon';
 
 export default function AdminSettingsPage() {
   const [values, setValues] = useState<Values>({});
@@ -110,6 +110,7 @@ export default function AdminSettingsPage() {
         <TabBtn active={tab === 'mail'} onClick={() => setTab('mail')}>E-posta</TabBtn>
         <TabBtn active={tab === 'bank'} onClick={() => setTab('bank')}>Havale / Banka</TabBtn>
         <TabBtn active={tab === 'rekabet'} onClick={() => setTab('rekabet')}>Rekabet / Fiyat</TabBtn>
+        <TabBtn active={tab === 'sezon'} onClick={() => setTab('sezon')}>Sezon (Okul Yılı)</TabBtn>
       </div>
 
       {tab === 'site' && (
@@ -291,6 +292,46 @@ export default function AdminSettingsPage() {
               Servisçi teklif verirken sistem talebin evi–okulu mesafesini hesaplar,
               seçtiğin değerle çarpar. Bu tutarın altındaki tekliflere hata döner.
               Böylece hem şoförlerin emeği hem de piyasa fiyatı korunmuş olur.
+            </p>
+          </div>
+        </Section>
+      )}
+
+      {tab === 'sezon' && (
+        <Section
+          title="Sezon (Okul Yılı)"
+          desc="Enrollment oluştururken kullanılacak varsayılan sezon başlangıç/bitiş ayı. Ödemeler bu ay aralığında oluşturulur."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Başlangıç Ayı" hint="Genellikle Eylül (9)">
+              <select
+                value={values['season.start_month'] ?? '9'}
+                onChange={(e) => set('season.start_month', e.target.value)}
+                className="w-full rounded-lg border border-charcoal-200 px-3 py-2 bg-white"
+              >
+                {['1 Ocak','2 Şubat','3 Mart','4 Nisan','5 Mayıs','6 Haziran','7 Temmuz','8 Ağustos','9 Eylül','10 Ekim','11 Kasım','12 Aralık'].map((label, i) => (
+                  <option key={i+1} value={String(i+1)}>{label}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Bitiş Ayı" hint="Genellikle Haziran (6)">
+              <select
+                value={values['season.end_month'] ?? '6'}
+                onChange={(e) => set('season.end_month', e.target.value)}
+                className="w-full rounded-lg border border-charcoal-200 px-3 py-2 bg-white"
+              >
+                {['1 Ocak','2 Şubat','3 Mart','4 Nisan','5 Mayıs','6 Haziran','7 Temmuz','8 Ağustos','9 Eylül','10 Ekim','11 Kasım','12 Aralık'].map((label, i) => (
+                  <option key={i+1} value={String(i+1)}>{label}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+            <strong>💡 Nasıl çalışır:</strong>
+            <p className="mt-1">
+              Örnek: Başlangıç=Eylül, Bitiş=Haziran ise yeni bir veli-servisçi anlaşması
+              oluşturulduğunda ödemeler otomatik olarak Eylül'den Haziran'a kadar 10 ay için
+              üretilir. Yıl ortasında başlayan anlaşmalarda kalan ayların ödemeleri oluşur.
             </p>
           </div>
         </Section>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,24 @@ import {
   Platform,
   Image,
   Alert,
+  TextInput,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { api, ApiError } from '../../src/api/client';
 import { useAuth, type Role } from '../../src/state/auth';
-import { Input, ErrorBanner } from '../../src/components/ui';
+import { ErrorBanner } from '../../src/components/ui';
 import { PhoneField } from '../../src/components/PhoneField';
 import { colors } from '../../src/theme/colors';
+import {
+  authenticate,
+  clearCredentials,
+  isBiometricEnabled,
+  isBiometricSupported,
+  loadCredentials,
+  saveCredentials,
+} from '../../src/lib/biometric';
 
 interface PhoneCheckResp {
   status: 'has_password' | 'needs_password' | 'needs_registration';
@@ -44,10 +53,60 @@ export default function GirisScreen() {
   const [phone, setPhone] = useState('');
   const [stage, setStage] = useState<'phone' | 'password'>('phone');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [savedForBiometric, setSavedForBiometric] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const backendPhone = phone.length === 10 ? '0' + phone : phone;
+
+  // Cihazda biyometrik varsa ve önceden kayıt yapıldıysa hemen prompt
+  useEffect(() => {
+    (async () => {
+      const supported = await isBiometricSupported();
+      setBiometricAvailable(supported);
+      const enabled = await isBiometricEnabled();
+      if (!supported || !enabled) return;
+      const saved = await loadCredentials();
+      if (!saved) return;
+      if (isProvider !== (saved.role === 'provider')) return;
+      setSavedForBiometric(true);
+    })();
+  }, [isProvider]);
+
+  async function tryBiometricLogin() {
+    const saved = await loadCredentials();
+    if (!saved) return;
+    const ok = await authenticate('Bindi\'ye giriş yap');
+    if (!ok) return;
+    // Auto-fill + submit
+    const phoneWithoutZero = saved.phone.startsWith('0') ? saved.phone.slice(1) : saved.phone;
+    setPhone(phoneWithoutZero);
+    setPassword(saved.password);
+    setLoading(true);
+    setError(null);
+    try {
+      const url = isProvider ? '/providers/login' : '/parents/login/password';
+      const resp = await api.post<LoginResp>(url, {
+        phone: saved.phone,
+        password: saved.password,
+      });
+      await setSession(isProvider ? 'provider' : 'parent', resp.token);
+      if (isProvider && (resp as any).status === 'pending_approval') {
+        router.replace('/(auth)/servisci-onay-bekleniyor');
+      } else {
+        router.replace(isProvider ? '/(app)/servisci' : '/(app)/veli');
+      }
+    } catch (e) {
+      setError('Kayıtlı giriş başarısız. Şifreni yeniden gir.');
+      await clearCredentials();
+      setSavedForBiometric(false);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function submitPhone() {
     if (phone.length !== 10) {
@@ -115,6 +174,18 @@ export default function GirisScreen() {
         password,
       });
       await setSession(isProvider ? 'provider' : 'parent', resp.token);
+
+      // "Beni hatırla" işaretliyse ve cihaz destekliyorsa credentials sakla
+      if (rememberMe && biometricAvailable) {
+        try {
+          await saveCredentials({
+            phone: backendPhone,
+            password,
+            role: isProvider ? 'provider' : 'parent',
+          });
+        } catch {}
+      }
+
       if (isProvider && resp.mustChangePassword) {
         router.replace('/(auth)/sifre-belirle');
       } else if (isProvider && (resp as any).status === 'pending_approval') {
@@ -214,6 +285,17 @@ export default function GirisScreen() {
                 <Text style={styles.primaryCtaArrow}>→</Text>
               </Pressable>
 
+              {savedForBiometric && (
+                <Pressable
+                  onPress={tryBiometricLogin}
+                  disabled={loading}
+                  style={({ pressed }) => [styles.biometricBtn, pressed && { opacity: 0.85 }]}
+                >
+                  <Text style={styles.biometricEmoji}>🔐</Text>
+                  <Text style={styles.biometricText}>Face ID ile Hızlı Giriş</Text>
+                </Pressable>
+              )}
+
               <Text style={styles.legal}>
                 Devam ederek <Text style={styles.legalBold}>KVKK aydınlatma metni</Text> ve{' '}
                 <Text style={styles.legalBold}>kullanım koşulları</Text>nı kabul etmiş olursun.
@@ -230,17 +312,49 @@ export default function GirisScreen() {
                 <Text style={styles.editPhoneEdit}>Değiştir</Text>
               </Pressable>
 
-              <Input
-                label="Şifre (6 rakam)"
-                value={password}
-                onChangeText={(v) => setPassword(v.replace(/\D/g, '').slice(0, 6))}
-                placeholder="••••••"
-                secureTextEntry
-                keyboardType="number-pad"
-                maxLength={6}
-                autoFocus
-                hint={password.length > 0 && password.length < 6 ? `${password.length}/6 rakam` : undefined}
-              />
+              {/* Custom şifre input — göz toggle ile */}
+              <View style={styles.pwWrap}>
+                <Text style={styles.pwLabel}>ŞİFRE (6 RAKAM)</Text>
+                <View style={styles.pwInputRow}>
+                  <TextInput
+                    style={styles.pwInput}
+                    value={password}
+                    onChangeText={(v) => setPassword(v.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="••••••"
+                    placeholderTextColor={colors.muted}
+                    secureTextEntry={!showPassword}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    autoFocus
+                  />
+                  <Pressable
+                    onPress={() => setShowPassword((s) => !s)}
+                    hitSlop={12}
+                    style={styles.pwEye}
+                  >
+                    <Text style={styles.pwEyeText}>{showPassword ? '🙈' : '👁'}</Text>
+                  </Pressable>
+                </View>
+                {password.length > 0 && password.length < 6 && (
+                  <Text style={styles.pwHint}>{password.length}/6 rakam</Text>
+                )}
+              </View>
+
+              {/* Beni hatırla + Face ID */}
+              {biometricAvailable && (
+                <Pressable
+                  onPress={() => setRememberMe((v) => !v)}
+                  style={styles.rememberRow}
+                  hitSlop={8}
+                >
+                  <View style={[styles.checkBox, rememberMe && styles.checkBoxActive]}>
+                    {rememberMe && <Text style={styles.checkMark}>✓</Text>}
+                  </View>
+                  <Text style={styles.rememberText}>
+                    Beni hatırla — Face ID / Touch ID ile giriş
+                  </Text>
+                </Pressable>
+              )}
 
               <Pressable
                 onPress={submitPassword}
@@ -254,6 +368,17 @@ export default function GirisScreen() {
                 <Text style={styles.primaryCtaText}>Giriş Yap</Text>
                 <Text style={styles.primaryCtaArrow}>→</Text>
               </Pressable>
+
+              {savedForBiometric && (
+                <Pressable
+                  onPress={tryBiometricLogin}
+                  disabled={loading}
+                  style={({ pressed }) => [styles.biometricBtn, pressed && { opacity: 0.85 }]}
+                >
+                  <Text style={styles.biometricEmoji}>🔐</Text>
+                  <Text style={styles.biometricText}>Face ID ile Giriş</Text>
+                </Pressable>
+              )}
 
               <Pressable
                 onPress={async () => {
@@ -379,4 +504,90 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   legalBold: { fontWeight: '700', color: colors.dark },
+
+  // Custom şifre input (göz toggle)
+  pwWrap: { marginBottom: 4 },
+  pwLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  pwInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: 14,
+    paddingRight: 4,
+  },
+  pwInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    fontSize: 22,
+    color: colors.dark,
+    letterSpacing: 8,
+    fontWeight: '700',
+  },
+  pwEye: {
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pwEyeText: { fontSize: 22 },
+  pwHint: { fontSize: 11, color: colors.muted, marginTop: 6, fontWeight: '600' },
+
+  // Beni hatırla
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 4,
+  },
+  checkBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkBoxActive: {
+    borderColor: colors.dark,
+    backgroundColor: colors.dark,
+  },
+  checkMark: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  rememberText: {
+    fontSize: 13,
+    color: colors.dark,
+    fontWeight: '600',
+    flex: 1,
+  },
+
+  // Face ID buton
+  biometricBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.primaryDark,
+    marginTop: 12,
+  },
+  biometricEmoji: { fontSize: 22 },
+  biometricText: { fontSize: 14, fontWeight: '800', color: colors.dark },
 });

@@ -1,9 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   Pressable,
   RefreshControl,
   Modal,
@@ -89,6 +89,37 @@ export default function OdemelerimScreen() {
     unpaidAmount: payments.filter((p) => p.status !== 'paid' && p.status !== 'waived').reduce((s, p) => s + p.amount, 0),
   };
 
+  // Ödemeleri öğrenciye göre gruplandır
+  const sections = useMemo(() => {
+    const byStudent = new Map<string, { studentName: string; providerName: string; data: typeof payments }>();
+    for (const p of payments) {
+      const key = `${p.student.id}:${p.provider.id}`;
+      if (!byStudent.has(key)) {
+        byStudent.set(key, {
+          studentName: p.student.name,
+          providerName: p.provider.companyName,
+          data: [],
+        });
+      }
+      byStudent.get(key)!.data.push(p);
+    }
+    return Array.from(byStudent.entries()).map(([key, val]) => {
+      // Her öğrenci için özet
+      const total = val.data.length;
+      const paid = val.data.filter((p) => p.status === 'paid').length;
+      const pending = val.data.filter((p) => p.status === 'pending' || p.status === 'late').length;
+      return {
+        key,
+        title: val.studentName,
+        providerName: val.providerName,
+        total,
+        paid,
+        pending,
+        data: val.data,
+      };
+    });
+  }, [payments]);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -116,8 +147,8 @@ export default function OdemelerimScreen() {
 
       {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
 
-      <FlatList
-        data={payments}
+      <SectionList
+        sections={sections}
         keyExtractor={(p) => p.id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.dark} />}
@@ -127,6 +158,21 @@ export default function OdemelerimScreen() {
             <Text style={styles.emptySub}>Aktif servis anlaşman olduğunda aylık ödemeler burada listelenir.</Text>
           </View>
         }
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.sectionSub}>🚐 {section.providerName}</Text>
+            </View>
+            <View style={styles.sectionStats}>
+              <Text style={styles.sectionStat}>
+                <Text style={{ color: colors.success }}>{section.paid}</Text>
+                <Text style={{ color: colors.muted }}> / {section.total}</Text>
+              </Text>
+              <Text style={styles.sectionStatSub}>ödendi</Text>
+            </View>
+          </View>
+        )}
         renderItem={({ item }) => {
           const s = STATUS_MAP[item.status];
           const days = daysUntil(item.dueDate);
@@ -367,6 +413,44 @@ const styles = StyleSheet.create({
   errorBox: { marginHorizontal: 20, padding: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 10 },
   errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
   list: { padding: 20, paddingTop: 4, gap: 10, flexGrow: 1 },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginTop: 8,
+    backgroundColor: colors.bg,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.primary,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.dark,
+    letterSpacing: -0.3,
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  sectionStats: {
+    alignItems: 'flex-end',
+  },
+  sectionStat: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  sectionStatSub: {
+    fontSize: 10,
+    color: colors.muted,
+    fontWeight: '700',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   card: { padding: 14, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
   period: { fontSize: 15, fontWeight: '800', color: colors.dark },

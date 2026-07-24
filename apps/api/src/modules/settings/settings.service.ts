@@ -37,6 +37,8 @@ const DEFAULTS: Record<SettingsKey, string> = {
   [SETTINGS_KEYS.BANK_NOTE_TEMPLATE]: 'Firma ünvanınızı açıklama olarak yazın.',
 
   [SETTINGS_KEYS.OFFER_MIN_PRICE_PER_KM]: '', // Boş = devre dışı
+  [SETTINGS_KEYS.SEASON_START_MONTH]: '9', // Eylül
+  [SETTINGS_KEYS.SEASON_END_MONTH]: '6',   // Haziran
 };
 
 // Env → default map (env değeri varsa DB default'unu ez)
