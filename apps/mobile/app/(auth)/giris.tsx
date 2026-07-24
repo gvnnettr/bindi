@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   roleBadgeProvider: { backgroundColor: 'rgba(255,255,255,0.25)' },
   roleBadgeIcon: { fontSize: 14 },
   roleBadgeText: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.dark,
     letterSpacing: 1,
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   heroSub: {
-    fontSize: 13,
+    fontSize: 15,
     color: 'rgba(31,41,55,0.75)',
     fontWeight: '500',
     textAlign: 'center',
@@ -355,8 +355,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  editPhoneText: { fontSize: 14, fontWeight: '700', color: colors.dark },
-  editPhoneEdit: { fontSize: 12, color: colors.blue, fontWeight: '700' },
+  editPhoneText: { fontSize: 15, fontWeight: '700', color: colors.dark },
+  editPhoneEdit: { fontSize: 15, color: colors.blue, fontWeight: '700' },
   primaryCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -370,9 +370,9 @@ const styles = StyleSheet.create({
   primaryCtaText: { fontSize: 15, fontWeight: '800', color: colors.dark },
   primaryCtaArrow: { fontSize: 18, color: colors.dark },
   forgot: { alignItems: 'center', marginTop: 20 },
-  forgotText: { fontSize: 13, color: colors.blue, fontWeight: '700' },
+  forgotText: { fontSize: 15, color: colors.blue, fontWeight: '700' },
   legal: {
-    fontSize: 11,
+    fontSize: 15,
     color: colors.muted,
     marginTop: 24,
     lineHeight: 17,

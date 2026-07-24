@@ -80,4 +80,9 @@ export class ProviderPaymentsController {
   ) {
     return this.svc.setPaymentStatusByProvider(req.provider.id, id, dto);
   }
+
+  @Post(':id/remind')
+  remind(@Req() req: ProviderRequest, @Param('id') id: string) {
+    return this.svc.remindPaymentByProvider(req.provider.id, id);
+  }
 }

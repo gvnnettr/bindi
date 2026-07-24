@@ -70,7 +70,7 @@ export function RouteMap({ home, school, distanceKm, etaMin, height = 160 }: Pro
     <View style={[styles.wrap, { height }]}>
       <MapView
         provider={PROVIDER_DEFAULT}
-        style={StyleSheet.absoluteFillObject}
+        style={StyleSheet.absoluteFill}
         initialRegion={region}
         pointerEvents="none"
         showsCompass={false}
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.4)',

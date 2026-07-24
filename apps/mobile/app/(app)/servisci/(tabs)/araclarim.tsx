@@ -14,10 +14,10 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { api, ApiError } from '../../../src/api/client';
-import { useAuth } from '../../../src/state/auth';
-import { Button, ErrorBanner, Input } from '../../../src/components/ui';
-import { colors } from '../../../src/theme/colors';
+import { api, ApiError } from '../../../../src/api/client';
+import { useAuth } from '../../../../src/state/auth';
+import { Button, ErrorBanner, Input } from '../../../../src/components/ui';
+import { colors } from '../../../../src/theme/colors';
 
 interface Vehicle {
   id: string;

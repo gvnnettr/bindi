@@ -14,10 +14,10 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { api, ApiError } from '../../../src/api/client';
-import { useAuth } from '../../../src/state/auth';
-import { Button, ErrorBanner, Input } from '../../../src/components/ui';
-import { colors } from '../../../src/theme/colors';
+import { api, ApiError } from '../../../../src/api/client';
+import { useAuth } from '../../../../src/state/auth';
+import { Button, ErrorBanner, Input } from '../../../../src/components/ui';
+import { colors } from '../../../../src/theme/colors';
 
 interface ActiveTrip {
   id: string;

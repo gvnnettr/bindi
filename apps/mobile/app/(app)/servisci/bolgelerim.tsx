@@ -119,7 +119,7 @@ export default function KonumScreen() {
                 <View style={styles.regionMap}>
                   <MapView
                     provider={PROVIDER_DEFAULT}
-                    style={StyleSheet.absoluteFillObject}
+                    style={StyleSheet.absoluteFill}
                     initialRegion={{
                       latitude: r.latitude!,
                       longitude: r.longitude!,
@@ -284,7 +284,7 @@ function AddLocationModal({
               <View style={mstyles.mapWrap}>
                 <MapView
                   provider={PROVIDER_DEFAULT}
-                  style={StyleSheet.absoluteFillObject}
+                  style={StyleSheet.absoluteFill}
                   region={mapRegion}
                   onRegionChangeComplete={(reg) => {
                     setCenter({ latitude: reg.latitude, longitude: reg.longitude });

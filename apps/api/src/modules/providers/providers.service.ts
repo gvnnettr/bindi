@@ -493,6 +493,50 @@ export class ProvidersService {
     };
   }
 
+  /**
+   * Public reviews — veli teklif detay ekranı için.
+   * KVKK: veli ismi 'A.Y.' baş harf maskesi. Son 10 yorum.
+   */
+  async getPublicReviews(providerId: string): Promise<{
+    avg: number;
+    total: number;
+    reviews: Array<{ rating: number; comment: string | null; createdAt: Date; parentInitials: string }>;
+  }> {
+    const [avgRow, recentRows] = await Promise.all([
+      this.ds.query(
+        `SELECT COALESCE(AVG(rating), 0)::float AS avg,
+                COUNT(*)::int AS c
+         FROM reviews WHERE provider_id = $1`,
+        [providerId],
+      ),
+      this.ds.query(
+        `SELECT r.rating, r.comment, r.created_at,
+                COALESCE(p.name, 'Anonim') AS parent_name
+         FROM reviews r
+         LEFT JOIN parents p ON r.parent_id = p.id
+         WHERE r.provider_id = $1
+         ORDER BY r.created_at DESC
+         LIMIT 10`,
+        [providerId],
+      ),
+    ]);
+    return {
+      avg: Number(avgRow[0]?.avg ?? 0),
+      total: avgRow[0]?.c ?? 0,
+      reviews: recentRows.map((row: any) => ({
+        rating: row.rating,
+        comment: row.comment,
+        createdAt: row.created_at,
+        parentInitials: String(row.parent_name || 'A')
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((w: string) => w[0].toUpperCase() + '.')
+          .join(''),
+      })),
+    };
+  }
+
   async getReviewsStats(providerId: string) {
     const [avgRow, distRows, recentRows] = await Promise.all([
       this.ds.query(

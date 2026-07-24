@@ -2,8 +2,8 @@ import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { useAuth } from '../../../src/state/auth';
-import { colors } from '../../../src/theme/colors';
+import { useAuth } from '../../../../src/state/auth';
+import { colors } from '../../../../src/theme/colors';
 
 interface MenuItem {
   label: string;

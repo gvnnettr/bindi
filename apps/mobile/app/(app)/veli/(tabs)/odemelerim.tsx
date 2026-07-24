@@ -13,11 +13,11 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { api, ApiError } from '../../../src/api/client';
-import { API_URL } from '../../../src/api/config';
-import { useAuth } from '../../../src/state/auth';
-import { Button, ErrorBanner } from '../../../src/components/ui';
-import { colors } from '../../../src/theme/colors';
+import { api, ApiError } from '../../../../src/api/client';
+import { API_URL } from '../../../../src/api/config';
+import { useAuth } from '../../../../src/state/auth';
+import { Button, ErrorBanner } from '../../../../src/components/ui';
+import { colors } from '../../../../src/theme/colors';
 
 type PaymentStatus = 'pending' | 'submitted' | 'paid' | 'late' | 'waived';
 
@@ -350,7 +350,7 @@ const mstyles = StyleSheet.create({
     padding: 12, backgroundColor: colors.primarySoft, borderRadius: 12,
     borderWidth: 1, borderColor: colors.primary + '40',
   },
-  infoLine: { fontSize: 12, fontWeight: '700', color: '#78350F' },
+  infoLine: { fontSize: 15, fontWeight: '700', color: '#78350F' },
   infoAmount: { fontSize: 22, fontWeight: '800', color: '#78350F', marginTop: 2 },
   pickerRow: { flexDirection: 'row', gap: 10 },
   pickerBtn: {
@@ -359,14 +359,14 @@ const mstyles = StyleSheet.create({
     alignItems: 'center', gap: 6,
   },
   pickerBtnEmoji: { fontSize: 32 },
-  pickerBtnText: { fontSize: 13, fontWeight: '700', color: colors.dark },
+  pickerBtnText: { fontSize: 15, fontWeight: '700', color: colors.dark },
   previewBox: {
     padding: 20, backgroundColor: colors.successSoft, borderRadius: 12,
     borderWidth: 1, borderColor: '#A7F3D0',
     alignItems: 'center', gap: 8,
   },
-  previewText: { fontSize: 14, fontWeight: '800', color: '#065F46' },
-  previewClear: { fontSize: 12, color: '#065F46', fontWeight: '700', textDecorationLine: 'underline' },
+  previewText: { fontSize: 15, fontWeight: '800', color: '#065F46' },
+  previewClear: { fontSize: 15, color: '#065F46', fontWeight: '700', textDecorationLine: 'underline' },
 });
 
 const styles = StyleSheet.create({
@@ -390,31 +390,31 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 16, fontWeight: '800', color: colors.dark },
   summaryLabel: { fontSize: 10, color: colors.muted, marginTop: 2, fontWeight: '600' },
   errorBox: { marginHorizontal: 20, padding: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 10 },
-  errorText: { color: '#991B1B', fontSize: 12, fontWeight: '600' },
+  errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
   list: { padding: 20, paddingTop: 4, gap: 10, flexGrow: 1 },
   card: { padding: 14, backgroundColor: colors.card, borderRadius: 14, borderWidth: 1, borderColor: colors.border },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
-  period: { fontSize: 14, fontWeight: '800', color: colors.dark },
-  student: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  period: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  student: { fontSize: 15, color: colors.muted, marginTop: 2 },
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1 },
   badgeText: { fontSize: 10, fontWeight: '800' },
   priceRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     backgroundColor: colors.bg, padding: 10, borderRadius: 10, marginBottom: 6,
   },
-  priceLabel: { fontSize: 11, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  priceLabel: { fontSize: 15, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   priceValue: { fontSize: 18, fontWeight: '800', color: colors.dark },
-  dueText: { fontSize: 11, color: colors.muted, fontWeight: '600' },
-  receiptText: { fontSize: 11, color: colors.success, fontWeight: '700' },
+  dueText: { fontSize: 15, color: colors.muted, fontWeight: '600' },
+  receiptText: { fontSize: 15, color: colors.success, fontWeight: '700' },
   providerNote: {
     padding: 10, backgroundColor: '#EEF2FF', borderRadius: 8,
     borderWidth: 1, borderColor: '#C7D2FE', marginTop: 4,
   },
   providerNoteLabel: { fontSize: 10, fontWeight: '800', color: '#3730A3', textTransform: 'uppercase', letterSpacing: 0.5 },
-  providerNoteText: { fontSize: 12, color: '#3730A3', marginTop: 3 },
+  providerNoteText: { fontSize: 15, color: '#3730A3', marginTop: 3 },
   uploadBtn: { marginTop: 8, padding: 10, borderRadius: 10, backgroundColor: colors.dark, alignItems: 'center' },
   uploadBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
-  emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },
+  emptySub: { fontSize: 15, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },
 });

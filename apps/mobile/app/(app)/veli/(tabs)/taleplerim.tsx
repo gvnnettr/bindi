@@ -9,9 +9,9 @@ import {
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { api, ApiError } from '../../../src/api/client';
-import { useAuth } from '../../../src/state/auth';
-import { colors } from '../../../src/theme/colors';
+import { api, ApiError } from '../../../../src/api/client';
+import { useAuth } from '../../../../src/state/auth';
+import { colors } from '../../../../src/theme/colors';
 
 interface ParentOfferInList {
   id: string;
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   title: { fontSize: 24, fontWeight: '800', color: colors.dark, letterSpacing: -0.5 },
-  sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  sub: { fontSize: 15, color: colors.muted, marginTop: 2 },
   tabRow: { flexDirection: 'row', paddingHorizontal: 20, paddingBottom: 12, gap: 6 },
   tab: {
     paddingHorizontal: 12,
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   tabActive: { backgroundColor: colors.dark, borderColor: colors.dark },
-  tabText: { fontSize: 11, fontWeight: '700', color: colors.dark },
+  tabText: { fontSize: 15, fontWeight: '700', color: colors.dark },
   tabTextActive: { color: '#fff' },
   tabCount: { fontWeight: '500' },
   errorBox: {
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
   },
-  errorText: { color: '#991B1B', fontSize: 12, fontWeight: '600' },
+  errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
   list: { padding: 20, paddingTop: 4, gap: 10, flexGrow: 1 },
   card: {
     backgroundColor: colors.card,
@@ -229,8 +229,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
-  school: { fontSize: 14, fontWeight: '800', color: colors.dark },
-  loc: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  school: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  loc: { fontSize: 15, color: colors.muted, marginTop: 2 },
   date: { fontSize: 10, color: colors.muted, fontWeight: '600' },
   selBar: {
     marginTop: 10,
@@ -247,8 +247,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  selName: { fontSize: 13, fontWeight: '800', color: '#065F46', marginTop: 2 },
-  selPrice: { fontSize: 12, color: '#065F46', marginTop: 2, fontWeight: '600' },
+  selName: { fontSize: 15, fontWeight: '800', color: '#065F46', marginTop: 2 },
+  selPrice: { fontSize: 15, color: '#065F46', marginTop: 2, fontWeight: '600' },
   offerBar: {
     marginTop: 10,
     padding: 10,
@@ -266,8 +266,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  offerCountText: { fontSize: 12, fontWeight: '800', color: colors.dark },
-  offerText: { flex: 1, fontSize: 12, color: colors.dark, fontWeight: '700' },
+  offerCountText: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  offerText: { flex: 1, fontSize: 15, color: colors.dark, fontWeight: '700' },
   chev: { fontSize: 20, color: colors.muted },
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },

@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import {
   ArrayMinSize,
   IsArray,
@@ -97,5 +97,14 @@ export class ProvidersAuthController {
   @Post('reset-password')
   reset(@Body() dto: ResetDto) {
     return this.svc.resetPassword(dto.phone, dto.code, dto.newPassword);
+  }
+
+  /**
+   * Public: bir servisçinin yorumları (KVKK: veli ismi 'A.Y.' maskeli)
+   * Veli teklif detay ekranında görüntüler
+   */
+  @Get(':id/reviews')
+  publicReviews(@Param('id') providerId: string) {
+    return this.svc.getPublicReviews(providerId);
   }
 }

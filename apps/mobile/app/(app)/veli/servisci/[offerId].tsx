@@ -55,11 +55,24 @@ function starsStr(avg: number | null): string {
   return '★'.repeat(n) + '☆'.repeat(5 - n);
 }
 
+interface PublicReview {
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  parentInitials: string;
+}
+interface PublicReviewsResp {
+  avg: number;
+  total: number;
+  reviews: PublicReview[];
+}
+
 export default function ServisciDetayScreen() {
   const { offerId, requestId } = useLocalSearchParams<{ offerId: string; requestId: string }>();
   const { token } = useAuth();
   const [request, setRequest] = useState<ParentRequest | null>(null);
   const [offer, setOffer] = useState<OfferItem | null>(null);
+  const [reviews, setReviews] = useState<PublicReviewsResp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selecting, setSelecting] = useState(false);
 
@@ -72,6 +85,14 @@ export default function ServisciDetayScreen() {
       setRequest(r);
       setOffer(o);
       setError(null);
+
+      // Public reviews (opsiyonel, hata olursa sessiz)
+      if (o?.provider?.id) {
+        try {
+          const rev = await api.get<PublicReviewsResp>(`/providers/${o.provider.id}/reviews`);
+          setReviews(rev);
+        } catch {}
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
     }
@@ -239,19 +260,51 @@ export default function ServisciDetayScreen() {
           </View>
         )}
 
-        {/* YORUMLAR — placeholder, backend endpoint eklendiğinde dolar */}
-        {p.rating && p.rating.count > 0 && (
+        {/* YORUMLAR — public endpoint'ten yüklenir */}
+        {reviews && reviews.total > 0 && (
           <View style={styles.section}>
             <View style={styles.commentsHeader}>
-              <Text style={styles.sectionTitle}>Yorumlar</Text>
-              <Text style={styles.commentCount}>· {p.rating.count}</Text>
+              <Text style={styles.sectionTitle}>Veli Yorumları</Text>
+              <Text style={styles.commentCount}>· {reviews.total}</Text>
             </View>
+
+            <View style={styles.avgRow}>
+              <Text style={styles.avgStars}>{starsStr(reviews.avg)}</Text>
+              <Text style={styles.avgNum}>{reviews.avg.toFixed(1)}</Text>
+              <Text style={styles.avgTotal}>{reviews.total} değerlendirme</Text>
+            </View>
+
+            {reviews.reviews.slice(0, 5).map((r, i) => (
+              <View key={i} style={styles.reviewCard}>
+                <View style={styles.reviewHeader}>
+                  <View style={styles.reviewInitials}>
+                    <Text style={styles.reviewInitialsText}>{r.parentInitials}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.reviewStars}>{starsStr(r.rating)}</Text>
+                    <Text style={styles.reviewDate}>
+                      {new Date(r.createdAt).toLocaleDateString('tr-TR', { month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                </View>
+                {r.comment && (
+                  <Text style={styles.reviewText}>"{r.comment}"</Text>
+                )}
+              </View>
+            ))}
+
+            {reviews.total > 5 && (
+              <Text style={styles.commentMore}>+ {reviews.total - 5} yorum daha</Text>
+            )}
+          </View>
+        )}
+
+        {reviews && reviews.total === 0 && (
+          <View style={styles.section}>
             <View style={styles.commentPlaceholder}>
-              <Text style={styles.commentPlaceholderText}>
-                {p.rating.count} veli değerlendirmesi
-              </Text>
+              <Text style={styles.commentPlaceholderText}>Henüz yorum yok</Text>
               <Text style={styles.commentPlaceholderSub}>
-                Yorumları görmek için servisçiyi seçtikten sonra "Servisçim" sekmesinden inceleyebilirsin.
+                Bu servisçi Bindi'de yeni. Belgeleri kontrol edildikten sonra teklif verebiliyor.
               </Text>
             </View>
           </View>
@@ -333,7 +386,7 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: colors.dark, letterSpacing: -0.2 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorBox: { padding: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 10 },
-  errorText: { color: '#991B1B', fontSize: 12, fontWeight: '600' },
+  errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
   body: { padding: 16, paddingBottom: 220 },
 
   // HERO
@@ -354,11 +407,11 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 18, fontWeight: '800', color: '#78350F' },
   heroTitle: { fontSize: 20, fontWeight: '800', color: colors.dark, letterSpacing: -0.5 },
-  heroSubtitle: { fontSize: 12, color: '#78350F', fontWeight: '600', marginTop: 2 },
+  heroSubtitle: { fontSize: 15, color: '#78350F', fontWeight: '600', marginTop: 2 },
   ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
-  ratingStars: { fontSize: 12, color: colors.primaryDark, letterSpacing: 0.5 },
-  ratingNum: { fontSize: 12, fontWeight: '800', color: colors.dark },
-  ratingMeta: { fontSize: 11, color: '#78350F', fontWeight: '600' },
+  ratingStars: { fontSize: 15, color: colors.primaryDark, letterSpacing: 0.5 },
+  ratingNum: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  ratingMeta: { fontSize: 15, color: '#78350F', fontWeight: '600' },
 
   statGrid: { flexDirection: 'row', gap: 6 },
   statBox: {
@@ -394,15 +447,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border, marginTop: 12, gap: 8,
   },
   sectionTitle: {
-    fontSize: 11, fontWeight: '800', color: colors.muted,
+    fontSize: 15, fontWeight: '800', color: colors.muted,
     textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4,
   },
   detailRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 5,
   },
-  detailLabel: { fontSize: 12, color: colors.muted, fontWeight: '600' },
-  detailValue: { fontSize: 13, color: colors.dark, fontWeight: '700' },
+  detailLabel: { fontSize: 15, color: colors.muted, fontWeight: '600' },
+  detailValue: { fontSize: 15, color: colors.dark, fontWeight: '700' },
   plateVal: {
     fontFamily: 'Courier', backgroundColor: colors.primary,
     paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6,
@@ -415,13 +468,67 @@ const styles = StyleSheet.create({
   },
   docBadgeText: { fontSize: 10, fontWeight: '800', color: '#065F46' },
 
-  noteText: { fontSize: 12, color: colors.dark, lineHeight: 18 },
+  noteText: { fontSize: 15, color: colors.dark, lineHeight: 18 },
 
   commentsHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  commentCount: { fontSize: 11, color: colors.muted, fontWeight: '600' },
+  commentCount: { fontSize: 15, color: colors.muted, fontWeight: '600' },
   commentPlaceholder: { paddingVertical: 8, alignItems: 'flex-start', gap: 4 },
-  commentPlaceholderText: { fontSize: 13, color: colors.dark, fontWeight: '700' },
-  commentPlaceholderSub: { fontSize: 11, color: colors.muted, lineHeight: 16 },
+  commentPlaceholderText: { fontSize: 15, color: colors.dark, fontWeight: '700' },
+  commentPlaceholderSub: { fontSize: 15, color: colors.muted, lineHeight: 16 },
+  avgRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  avgStars: { fontSize: 15, color: colors.primaryDark, letterSpacing: 2 },
+  avgNum: { fontSize: 18, fontWeight: '800', color: colors.dark },
+  avgTotal: { fontSize: 15, color: colors.muted, fontWeight: '600' },
+  reviewCard: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  reviewInitials: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primarySoft,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewInitialsText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.dark,
+    letterSpacing: 0.5,
+  },
+  reviewStars: { fontSize: 15, color: colors.primaryDark, letterSpacing: 2 },
+  reviewDate: { fontSize: 10, color: colors.muted, marginTop: 2 },
+  reviewText: {
+    fontSize: 15,
+    color: colors.dark,
+    lineHeight: 19,
+    fontStyle: 'italic',
+    marginLeft: 42,
+  },
+  commentMore: {
+    fontSize: 15,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 8,
+    fontWeight: '600',
+  },
 
   // Alt sabit bölüm
   offerSheet: {
@@ -449,8 +556,8 @@ const styles = StyleSheet.create({
     fontSize: 26, fontWeight: '800', color: colors.dark,
     letterSpacing: -0.5, marginTop: 4,
   },
-  offerSheetUnit: { fontSize: 13, color: colors.muted, fontWeight: '700' },
-  offerSheetSub: { fontSize: 13, fontWeight: '700', color: colors.dark, marginTop: 4 },
+  offerSheetUnit: { fontSize: 15, color: colors.muted, fontWeight: '700' },
+  offerSheetSub: { fontSize: 15, fontWeight: '700', color: colors.dark, marginTop: 4 },
   primaryCta: {
     backgroundColor: colors.primary,
     paddingVertical: 15, borderRadius: 14,
@@ -458,5 +565,5 @@ const styles = StyleSheet.create({
     shadowColor: colors.primary, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
   },
   primaryCtaText: { color: colors.dark, fontWeight: '800', fontSize: 15 },
-  legal: { fontSize: 11, color: colors.muted, textAlign: 'center', marginTop: 8 },
+  legal: { fontSize: 15, color: colors.muted, textAlign: 'center', marginTop: 8 },
 });

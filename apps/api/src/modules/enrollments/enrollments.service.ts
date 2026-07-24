@@ -16,6 +16,7 @@ import {
   ProviderSubscription,
 } from '@servis/db';
 import { NotificationsService } from '../notifications/notifications.service';
+import { SmsService } from '../sms/sms.service';
 import { PACKAGE_CODES } from '@servis/shared';
 
 @Injectable()
@@ -34,6 +35,7 @@ export class EnrollmentsService {
     @InjectRepository(ProviderSubscription)
     private readonly subs: Repository<ProviderSubscription>,
     private readonly notif: NotificationsService,
+    private readonly sms: SmsService,
   ) {}
 
   private async assertTakipActive(providerId: string) {
@@ -423,6 +425,65 @@ export class EnrollmentsService {
     }
 
     return { ok: true };
+  }
+
+  /**
+   * Servisçinin veliye ödeme hatırlatma göndermesi.
+   * Rate limit: son 24 saat içinde hatırlatma varsa hata döner.
+   * Push + SMS gönderir.
+   */
+  async remindPaymentByProvider(providerId: string, paymentId: string) {
+    const payment = await this.payments.findOne({
+      where: { id: paymentId },
+      relations: ['enrollment', 'enrollment.parent', 'enrollment.provider', 'enrollment.student'],
+    });
+    if (!payment) throw new NotFoundException('Ödeme bulunamadı');
+    if (payment.enrollment.providerId !== providerId)
+      throw new NotFoundException('Ödeme bulunamadı');
+    if (payment.status === 'paid') {
+      throw new BadRequestException('Bu ödeme zaten ödendi, hatırlatmaya gerek yok');
+    }
+
+    // Rate limit: 24 saat
+    if (payment.lastReminderAt) {
+      const hoursSince = (Date.now() - payment.lastReminderAt.getTime()) / (1000 * 60 * 60);
+      if (hoursSince < 24) {
+        const remaining = Math.ceil(24 - hoursSince);
+        throw new BadRequestException(
+          `Son hatırlatma ${Math.floor(hoursSince)} saat önce gönderildi. ${remaining} saat sonra tekrar hatırlatabilirsin.`,
+        );
+      }
+    }
+
+    const parent = payment.enrollment.parent;
+    const provider = payment.enrollment.provider;
+    const student = payment.enrollment.student;
+    const amountStr = Number(payment.amount).toLocaleString('tr-TR');
+
+    // Push
+    try {
+      await this.notif.create({
+        role: 'parent',
+        recipientId: parent.id,
+        type: 'payment.reminder',
+        title: 'Ödeme hatırlatması ⏰',
+        body: `${provider.companyName}: ${student.name} · ${payment.period} dönemi ${amountStr}₺ ödemesi bekleniyor.`,
+        link: `/veli/odemelerim`,
+      });
+    } catch {}
+
+    // SMS
+    try {
+      await this.sms.send(
+        parent.phone,
+        `${provider.companyName}: ${student.name} icin ${payment.period} donemi ${amountStr}TL odemesi bekleniyor. Bindi uygulamasindan dekont yukleyebilirsiniz.`,
+      );
+    } catch {}
+
+    payment.lastReminderAt = new Date();
+    await this.payments.save(payment);
+
+    return { ok: true, remindedAt: payment.lastReminderAt };
   }
 
   // ---- Veli tarafı ----

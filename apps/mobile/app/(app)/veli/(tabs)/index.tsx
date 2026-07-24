@@ -4,9 +4,9 @@ import { router, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { api, ApiError } from '../../../src/api/client';
-import { useAuth } from '../../../src/state/auth';
-import { colors } from '../../../src/theme/colors';
+import { api, ApiError } from '../../../../src/api/client';
+import { useAuth } from '../../../../src/state/auth';
+import { colors } from '../../../../src/theme/colors';
 
 interface ParentInfo {
   id: string;
@@ -135,7 +135,7 @@ export default function VeliAnaScreen() {
         <SafeAreaView edges={['top']} style={styles.heroInner}>
           <View style={styles.heroTop}>
             <Image
-              source={require('../../../assets/bindi-logo.png')}
+              source={require('../../../../assets/bindi-logo.png')}
               style={styles.heroLogo}
               resizeMode="contain"
             />
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   },
   heroLogo: { width: 140, height: 62 },
   heroTopRight: { alignItems: 'flex-end' },
-  heroGreet: { fontSize: 11, color: 'rgba(31,41,55,0.7)', fontWeight: '600' },
+  heroGreet: { fontSize: 15, color: 'rgba(31,41,55,0.7)', fontWeight: '600' },
   heroName: { fontSize: 15, fontWeight: '800', color: colors.dark, maxWidth: 160 },
   ctaBox: {
     backgroundColor: colors.dark,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   ctaLeft: { flex: 1 },
   ctaLabel: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: -0.3 },
-  ctaSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 3, fontWeight: '500' },
+  ctaSub: { color: 'rgba(255,255,255,0.7)', fontSize: 15, marginTop: 3, fontWeight: '500' },
   ctaIcon: {
     width: 44,
     height: 44,
@@ -330,8 +330,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: colors.success,
   },
-  trackLabel: { fontSize: 14, fontWeight: '800', color: '#065F46' },
-  trackSub: { fontSize: 11, color: '#065F46', marginTop: 2, fontWeight: '600' },
+  trackLabel: { fontSize: 15, fontWeight: '800', color: '#065F46' },
+  trackSub: { fontSize: 15, color: '#065F46', marginTop: 2, fontWeight: '600' },
   trackArrow: { fontSize: 22, color: '#065F46', fontWeight: '700' },
   errorBox: {
     padding: 12,
@@ -340,10 +340,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
   },
-  errorText: { color: '#991B1B', fontSize: 12, fontWeight: '600' },
+  errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
   section: { gap: 8 },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '800',
     color: colors.muted,
     textTransform: 'uppercase',
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   activeCompany: { fontSize: 15, fontWeight: '800', color: colors.dark, maxWidth: 220 },
-  activeSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  activeSub: { fontSize: 15, color: colors.muted, marginTop: 2 },
   activeBadge: {
     backgroundColor: colors.successSoft,
     borderColor: '#A7F3D0',
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   activeBadgeText: { fontSize: 10, fontWeight: '800', color: '#065F46' },
-  activeVehicle: { fontSize: 12, color: colors.dark, fontWeight: '600' },
+  activeVehicle: { fontSize: 15, color: colors.dark, fontWeight: '600' },
   activePrice: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 10,
   },
-  activePriceLabel: { fontSize: 11, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  activePriceLabel: { fontSize: 15, color: colors.muted, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
   activePriceValue: { fontSize: 18, fontWeight: '800', color: colors.dark },
   reqCard: {
     flexDirection: 'row',
@@ -408,13 +408,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   reqIcon: { fontSize: 18, fontWeight: '800', color: '#78350F' },
-  reqTitle: { fontSize: 14, fontWeight: '700', color: colors.dark },
-  reqSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  reqTitle: { fontSize: 15, fontWeight: '700', color: colors.dark },
+  reqSub: { fontSize: 15, color: colors.muted, marginTop: 2 },
   reqChev: { fontSize: 20, color: colors.muted, marginLeft: 4 },
   emptyBox: {
     padding: 40,
     alignItems: 'center',
   },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
-  emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 280 },
+  emptySub: { fontSize: 15, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 280 },
 });

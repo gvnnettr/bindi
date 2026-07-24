@@ -10,9 +10,9 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
-import { api, ApiError } from '../../../src/api/client';
-import { useAuth } from '../../../src/state/auth';
-import { colors } from '../../../src/theme/colors';
+import { api, ApiError } from '../../../../src/api/client';
+import { useAuth } from '../../../../src/state/auth';
+import { colors } from '../../../../src/theme/colors';
 
 interface RequestRow {
   id: string;
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   title: { fontSize: 24, fontWeight: '800', color: colors.dark, letterSpacing: -0.5 },
-  sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
+  sub: { fontSize: 15, color: colors.muted, marginTop: 2 },
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 20,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark,
     borderColor: colors.dark,
   },
-  chipText: { fontSize: 12, fontWeight: '700', color: colors.dark },
+  chipText: { fontSize: 15, fontWeight: '700', color: colors.dark },
   chipTextActive: { color: '#fff' },
   chipCount: { fontWeight: '500' },
   errorBox: {
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 10,
   },
-  errorText: { color: '#991B1B', fontSize: 12, fontWeight: '600' },
+  errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
   list: { padding: 20, paddingTop: 4, gap: 10, flexGrow: 1 },
   card: {
     backgroundColor: colors.card,
@@ -248,8 +248,8 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 10,
   },
-  cardSchool: { fontSize: 14, fontWeight: '800', color: colors.dark },
-  cardLoc: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  cardSchool: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  cardLoc: { fontSize: 15, color: colors.muted, marginTop: 2 },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -288,13 +288,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  priceLabel: { fontSize: 11, color: '#78350F', fontWeight: '700' },
-  priceValue: { fontSize: 14, color: '#78350F', fontWeight: '800' },
+  priceLabel: { fontSize: 15, color: '#78350F', fontWeight: '700' },
+  priceValue: { fontSize: 15, color: '#78350F', fontWeight: '800' },
   empty: {
     padding: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
-  emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },
+  emptySub: { fontSize: 15, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },
 });

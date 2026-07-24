@@ -21,6 +21,7 @@ import {
 import { ParentPaymentsController } from './parent-payments.controller';
 import { ProvidersModule } from '../providers/providers.module';
 import { ParentsModule } from '../parents/parents.module';
+import { SmsModule } from '../sms/sms.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { ParentsModule } from '../parents/parents.module';
     }),
     ProvidersModule,
     ParentsModule,
+    SmsModule,
   ],
   controllers: [
     EnrollmentsMeController,
