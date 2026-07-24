@@ -4,6 +4,7 @@ import { router, useFocusEffect } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
 import { api } from '../api/client';
 import { useAuth } from '../state/auth';
+import { notifBase } from '../api/notifications';
 import { colors } from '../theme/colors';
 
 interface Props {
@@ -17,16 +18,16 @@ interface Props {
  * Tıklayınca /bildirimler ekranına gider.
  */
 export function NotificationBell({ color = colors.dark, size = 22 }: Props) {
-  const { token } = useAuth();
+  const { token, role } = useAuth();
   const [count, setCount] = useState(0);
 
   const refresh = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await api.get<{ count: number }>('/me/notifications/unread-count', token);
+      const r = await api.get<{ count: number }>(`${notifBase(role)}/notifications/unread-count`, token);
       setCount(r.count ?? 0);
     } catch {}
-  }, [token]);
+  }, [token, role]);
 
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 

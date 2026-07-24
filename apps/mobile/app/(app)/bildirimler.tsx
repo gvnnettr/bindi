@@ -12,6 +12,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '../../src/api/client';
 import { useAuth } from '../../src/state/auth';
+import { notifBase } from '../../src/api/notifications';
 import { colors } from '../../src/theme/colors';
 
 interface NotifItem {
@@ -48,7 +49,8 @@ function typeIcon(type: string): string {
 }
 
 export default function BildirimlerScreen() {
-  const { token } = useAuth();
+  const { token, role } = useAuth();
+  const base = notifBase(role);
   const [items, setItems] = useState<NotifItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,7 +59,7 @@ export default function BildirimlerScreen() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await api.get<NotifItem[]>('/me/notifications', token);
+      const r = await api.get<NotifItem[]>(`${base}/notifications`, token);
       setItems(r);
       setError(null);
     } catch (e) {
@@ -65,7 +67,7 @@ export default function BildirimlerScreen() {
     } finally {
       setLoaded(true);
     }
-  }, [token]);
+  }, [token, base]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -81,7 +83,7 @@ export default function BildirimlerScreen() {
       return;
     }
     try {
-      await api.post(`/me/notifications/${n.id}/read`, {}, token);
+      await api.post(`${base}/notifications/${n.id}/read`, {}, token);
       setItems((prev) => prev.map((x) => x.id === n.id ? { ...x, read: true } : x));
       if (n.link) router.push(n.link as any);
     } catch {}
@@ -89,7 +91,7 @@ export default function BildirimlerScreen() {
 
   async function markAllRead() {
     try {
-      await api.post('/me/notifications/read-all', {}, token);
+      await api.post(`${base}/notifications/read-all`, {}, token);
       setItems((prev) => prev.map((x) => ({ ...x, read: true })));
     } catch {}
   }
