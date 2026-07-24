@@ -6,7 +6,7 @@ import { adminSession } from '@/lib/session';
 import { Button, Field, Input, Select, Textarea } from '@/components/ui';
 
 type Values = Record<string, string>;
-type Tab = 'site' | 'sms' | 'mail' | 'bank' | 'rekabet' | 'sezon';
+type Tab = 'site' | 'sms' | 'mail' | 'bank' | 'rekabet' | 'sezon' | 'push';
 
 export default function AdminSettingsPage() {
   const [values, setValues] = useState<Values>({});
@@ -71,6 +71,28 @@ export default function AdminSettingsPage() {
     }
   }
 
+  async function testPush(role: 'parent' | 'provider', phone: string, title: string, body: string) {
+    const token = adminSession.get();
+    if (!token) return;
+    setNotice(null);
+    setError(null);
+    try {
+      const r = await apiPost<{ ok: boolean; displayName?: string; mobileTokens?: number }>(
+        '/admin/push/test',
+        { role, phone, title, body },
+        token,
+      );
+      const label = role === 'parent' ? 'Veli' : 'Servisçi';
+      if (r.mobileTokens === 0) {
+        setError(`${label} "${r.displayName ?? phone}" için kayıtlı cihaz yok. Uygulamayı bir kere aç ve bildirim izni ver.`);
+      } else {
+        setNotice(`${label} "${r.displayName ?? phone}" için push gönderildi (${r.mobileTokens} cihaz).`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function testMail() {
     const token = adminSession.get();
     if (!token) return;
@@ -111,6 +133,7 @@ export default function AdminSettingsPage() {
         <TabBtn active={tab === 'bank'} onClick={() => setTab('bank')}>Havale / Banka</TabBtn>
         <TabBtn active={tab === 'rekabet'} onClick={() => setTab('rekabet')}>Rekabet / Fiyat</TabBtn>
         <TabBtn active={tab === 'sezon'} onClick={() => setTab('sezon')}>Sezon (Okul Yılı)</TabBtn>
+        <TabBtn active={tab === 'push'} onClick={() => setTab('push')}>Test Bildirim</TabBtn>
       </div>
 
       {tab === 'site' && (
@@ -337,13 +360,81 @@ export default function AdminSettingsPage() {
         </Section>
       )}
 
-      <div className="flex justify-end gap-3 border-t border-charcoal-100 pt-4">
-        <Button variant="secondary" onClick={load}>Vazgeç</Button>
-        <Button disabled={loading} onClick={save}>
-          {loading ? 'Kaydediliyor…' : 'Kaydet'}
+      {tab === 'push' && <TestPushPanel onSend={testPush} />}
+
+      {tab !== 'push' && (
+        <div className="flex justify-end gap-3 border-t border-charcoal-100 pt-4">
+          <Button variant="secondary" onClick={load}>Vazgeç</Button>
+          <Button disabled={loading} onClick={save}>
+            {loading ? 'Kaydediliyor…' : 'Kaydet'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TestPushPanel({
+  onSend,
+}: {
+  onSend: (role: 'parent' | 'provider', phone: string, title: string, body: string) => Promise<void>;
+}) {
+  const [role, setRole] = useState<'parent' | 'provider'>('parent');
+  const [phone, setPhone] = useState('');
+  const [title, setTitle] = useState('Bindi Test');
+  const [body, setBody] = useState('Bu bir test bildirimidir.');
+  const [sending, setSending] = useState(false);
+
+  async function send() {
+    if (!phone) return;
+    setSending(true);
+    try {
+      await onSend(role, phone.trim(), title, body);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <Section
+      title="Test Bildirim Gönder"
+      desc="Bir veli veya servisçi cihazına push bildirimi at. Kullanıcı Bindi mobil uygulamasına giriş yapmış ve bildirim iznini vermiş olmalı."
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Rol">
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as 'parent' | 'provider')}
+            className="w-full rounded-lg border border-charcoal-200 px-3 py-2 bg-white"
+          >
+            <option value="parent">Veli</option>
+            <option value="provider">Servisçi</option>
+          </select>
+        </Field>
+        <Field label="Telefon" hint="Örn: 05050328585">
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05xxxxxxxxx" />
+        </Field>
+      </div>
+      <Field label="Başlık">
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+      </Field>
+      <Field label="Mesaj">
+        <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} />
+      </Field>
+      <div className="flex justify-end gap-3">
+        <Button disabled={sending || !phone} onClick={send}>
+          {sending ? 'Gönderiliyor…' : '📱 Bildirim Gönder'}
         </Button>
       </div>
-    </div>
+      <div className="rounded-lg bg-blue-50 border border-blue-200 p-3 text-sm text-blue-900">
+        <strong>💡 Not:</strong>
+        <p className="mt-1">
+          Cihaz kayıtlı değilse hata mesajı görürsün — o zaman kullanıcı Bindi uygulamasını
+          en az bir kere açmalı ve iOS/Android bildirim iznini vermeli. FCM token
+          uygulama açılışında otomatik kaydolur.
+        </p>
+      </div>
+    </Section>
   );
 }
 

@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { MobilePushToken, PushSubscription } from '@servis/db';
+import { MobilePushToken, Parent, Provider, PushSubscription } from '@servis/db';
 import { PushService } from './push.service';
 import {
   PushPublicController,
@@ -17,7 +17,7 @@ import { AdminModule } from '../admin/admin.module';
 @Global()
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PushSubscription, MobilePushToken]),
+    TypeOrmModule.forFeature([PushSubscription, MobilePushToken, Parent, Provider]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({

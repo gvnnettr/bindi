@@ -1,12 +1,17 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  NotFoundException,
   Post,
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import { Parent, Provider, MobilePushToken } from '@servis/db';
 import { PushService } from './push.service';
 import {
   ProviderJwtStrategy,
@@ -40,6 +45,7 @@ class TestPushDto {
   @IsIn(['provider', 'parent', 'admin'])
   role!: 'provider' | 'parent' | 'admin';
   @IsOptional() @IsString() recipientId?: string;
+  @IsOptional() @IsString() phone?: string;
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() body?: string;
 }
@@ -109,7 +115,13 @@ export class ParentPushController {
 @UseGuards(AdminJwtGuard)
 @Controller('admin/push')
 export class AdminPushController {
-  constructor(private readonly svc: PushService) {}
+  constructor(
+    private readonly svc: PushService,
+    @InjectRepository(Parent) private readonly parents: Repository<Parent>,
+    @InjectRepository(Provider) private readonly providers: Repository<Provider>,
+    @InjectRepository(MobilePushToken)
+    private readonly mobileTokens: Repository<MobilePushToken>,
+  ) {}
 
   @Post('subscribe')
   subscribe(@Req() req: AdminRequest, @Body() dto: SubscribeDto) {
@@ -123,13 +135,41 @@ export class AdminPushController {
 
   @Post('test')
   async test(@Body() dto: TestPushDto) {
-    await this.svc.sendToRecipient(dto.role, dto.recipientId ?? null, {
+    let recipientId = dto.recipientId ?? null;
+    let displayName = '';
+
+    if (!recipientId && dto.phone) {
+      const phone = dto.phone.replace(/\s+/g, '');
+      if (dto.role === 'parent') {
+        const p = await this.parents.findOne({ where: { phone } });
+        if (!p) throw new NotFoundException(`Veli bulunamadı: ${phone}`);
+        recipientId = p.id;
+        displayName = p.name ?? phone;
+      } else if (dto.role === 'provider') {
+        const p = await this.providers.findOne({ where: { phone } });
+        if (!p) throw new NotFoundException(`Servisçi bulunamadı: ${phone}`);
+        recipientId = p.id;
+        displayName = p.companyName ?? phone;
+      } else {
+        throw new BadRequestException('admin rolü için phone desteklenmiyor');
+      }
+    }
+
+    if (!recipientId) {
+      throw new BadRequestException('recipientId veya phone gerekli');
+    }
+
+    const tokenCount = await this.mobileTokens.count({
+      where: { role: dto.role, recipientId },
+    });
+
+    await this.svc.sendToRecipient(dto.role, recipientId, {
       title: dto.title ?? 'Bindi Test',
       body:
         dto.body ??
         'Bu bir test bildirimidir. Alıyorsan mobil push kurulumu çalışıyor.',
       data: { source: 'admin-test' },
     });
-    return { ok: true };
+    return { ok: true, recipientId, displayName, mobileTokens: tokenCount };
   }
 }
