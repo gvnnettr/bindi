@@ -34,6 +34,8 @@ export default function AdminParentDetailPage() {
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showAddStudent, setShowAddStudent] = useState(false);
+  const [showAddRequest, setShowAddRequest] = useState(false);
 
   async function load() {
     const token = adminSession.get();
@@ -123,7 +125,17 @@ export default function AdminParentDetailPage() {
       </div>
 
       {/* Öğrenciler */}
-      <Card title={`Öğrenciler (${students.length})`}>
+      <Card
+        title={`Öğrenciler (${students.length})`}
+        action={
+          <button
+            onClick={() => setShowAddStudent(true)}
+            className="text-sm font-bold text-sunset-600 hover:underline"
+          >
+            + Öğrenci Ekle
+          </button>
+        }
+      >
         {students.length === 0 ? (
           <div className="text-sm text-charcoal-400">Öğrenci yok</div>
         ) : (
@@ -143,7 +155,19 @@ export default function AdminParentDetailPage() {
       </Card>
 
       {/* Talepler */}
-      <Card title={`Talepler (${requests.length})`}>
+      <Card
+        title={`Talepler (${requests.length})`}
+        action={
+          students.length > 0 ? (
+            <button
+              onClick={() => setShowAddRequest(true)}
+              className="text-sm font-bold text-sunset-600 hover:underline"
+            >
+              + Admin Adına Talep Aç
+            </button>
+          ) : null
+        }
+      >
         {requests.length === 0 ? (
           <div className="text-sm text-charcoal-400">Talep yok</div>
         ) : (
@@ -229,14 +253,227 @@ export default function AdminParentDetailPage() {
           </table>
         </Card>
       )}
+
+      {showAddStudent && (
+        <AddStudentModal
+          parentId={id}
+          onClose={() => setShowAddStudent(false)}
+          onDone={() => { setShowAddStudent(false); load(); }}
+        />
+      )}
+
+      {showAddRequest && (
+        <AddRequestModal
+          parentId={id}
+          students={students}
+          onClose={() => setShowAddRequest(false)}
+          onDone={() => { setShowAddRequest(false); load(); }}
+        />
+      )}
     </div>
   );
 }
 
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function AddStudentModal({ parentId, onClose, onDone }: { parentId: string; onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [studentClass, setStudentClass] = useState('');
+  const [schoolId, setSchoolId] = useState('');
+  const [schools, setSchools] = useState<Array<{ id: string; name: string; city: string; district: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = adminSession.get();
+    if (!token) return;
+    apiGet<any[]>('/admin/schools', token)
+      .then(setSchools)
+      .catch(() => {});
+  }, []);
+
+  async function submit() {
+    if (!name.trim() || !schoolId) { setError('Ad ve okul zorunlu'); return; }
+    setLoading(true); setError(null);
+    try {
+      const token = adminSession.get();
+      if (!token) throw new Error('Oturum yok');
+      await apiPost(`/admin/parents/${parentId}/students`, {
+        name: name.trim(),
+        class: studentClass.trim() || undefined,
+        schoolId,
+      }, token);
+      onDone();
+    } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 space-y-3">
+        <div className="flex items-start justify-between">
+          <h2 className="text-xl font-bold text-charcoal-900">Yeni Öğrenci Ekle</h2>
+          <button onClick={onClose} className="text-charcoal-400 text-xl">✕</button>
+        </div>
+        {error && <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">{error}</div>}
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Ad Soyad *</label>
+          <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" placeholder="Örn: Elif Güven" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Sınıf</label>
+          <input value={studentClass} onChange={(e) => setStudentClass(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" placeholder="Örn: 3. Sınıf" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Okul *</label>
+          <select value={schoolId} onChange={(e) => setSchoolId(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1 bg-white">
+            <option value="">— Okul seç —</option>
+            {schools.map((s) => (
+              <option key={s.id} value={s.id}>{s.name} ({s.district}, {s.city})</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1">Vazgeç</Button>
+          <Button onClick={submit} disabled={loading} className="flex-1">{loading ? 'Ekleniyor...' : 'Ekle'}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddRequestModal({
+  parentId,
+  students,
+  onClose,
+  onDone,
+}: {
+  parentId: string;
+  students: Array<{ id: string; name: string; school: { name: string; city: string; district: string } | null }>;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [city, setCity] = useState('');
+  const [district, setDistrict] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [address, setAddress] = useState('');
+  const [pickupType, setPickupType] = useState<'both' | 'morning_only' | 'afternoon_only'>('both');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // İlk seçilen öğrencinin okulundan şehir/ilçe önerisi
+  useEffect(() => {
+    if (selectedIds.length > 0 && !city) {
+      const s = students.find((x) => x.id === selectedIds[0]);
+      if (s?.school) {
+        setCity(s.school.city);
+        setDistrict(s.school.district);
+      }
+    }
+  }, [selectedIds, students, city]);
+
+  async function submit() {
+    if (selectedIds.length === 0) { setError('En az bir öğrenci seç'); return; }
+    if (!city.trim() || !district.trim() || !neighborhood.trim() || address.trim().length < 5) {
+      setError('Şehir, ilçe, mahalle ve adres zorunlu (adres en az 5 karakter)');
+      return;
+    }
+    setLoading(true); setError(null);
+    try {
+      const token = adminSession.get();
+      if (!token) throw new Error('Oturum yok');
+      await apiPost(`/admin/parents/${parentId}/requests`, {
+        studentIds: selectedIds,
+        city: city.trim(),
+        district: district.trim(),
+        neighborhood: neighborhood.trim(),
+        address: address.trim(),
+        pickupType,
+        notes: notes.trim() || undefined,
+      }, token);
+      onDone();
+    } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-lg rounded-xl bg-white p-6 space-y-3 max-h-[92vh] overflow-y-auto">
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-charcoal-900">Admin Adına Talep Aç</h2>
+            <p className="text-xs text-charcoal-500 mt-1">Veli için talep oluştur, servisçilere SMS + push gider</p>
+          </div>
+          <button onClick={onClose} className="text-charcoal-400 text-xl">✕</button>
+        </div>
+        {error && <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">{error}</div>}
+
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Öğrenciler *</label>
+          <div className="space-y-1 mt-1">
+            {students.map((s) => (
+              <label key={s.id} className="flex items-center gap-2 p-2 hover:bg-charcoal-50 rounded cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.includes(s.id)}
+                  onChange={() => setSelectedIds((prev) => prev.includes(s.id) ? prev.filter((x) => x !== s.id) : [...prev, s.id])}
+                />
+                <div>
+                  <div className="text-sm font-bold text-charcoal-900">{s.name}</div>
+                  {s.school && <div className="text-xs text-charcoal-500">{s.school.name}</div>}
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-xs font-bold text-charcoal-500 uppercase">Şehir *</label>
+            <input value={city} onChange={(e) => setCity(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" placeholder="Ordu" />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-charcoal-500 uppercase">İlçe *</label>
+            <input value={district} onChange={(e) => setDistrict(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" placeholder="Altınordu" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Mahalle *</label>
+          <input value={neighborhood} onChange={(e) => setNeighborhood(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" placeholder="Şarkiye Mah." />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Adres *</label>
+          <input value={address} onChange={(e) => setAddress(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" placeholder="Sahil Cad. No: 42" />
+        </div>
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Servis Tercihi</label>
+          <select value={pickupType} onChange={(e) => setPickupType(e.target.value as any)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1 bg-white">
+            <option value="both">Gidiş + Dönüş</option>
+            <option value="morning_only">Sadece Sabah</option>
+            <option value="afternoon_only">Sadece Öğleden Sonra</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-bold text-charcoal-500 uppercase">Not (opsiyonel)</label>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full rounded-lg border border-charcoal-200 px-3 py-2 mt-1" rows={2} placeholder="Örn: 3 gün deneme yapılabilir" />
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1">Vazgeç</Button>
+          <Button onClick={submit} disabled={loading} className="flex-1">
+            {loading ? 'Oluşturuluyor...' : 'Talep Oluştur & Bildir'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Card({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="rounded-xl border border-charcoal-200 bg-white p-4">
-      <h2 className="text-sm font-bold text-charcoal-900 uppercase tracking-wide mb-3">{title}</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-bold text-charcoal-900 uppercase tracking-wide">{title}</h2>
+        {action}
+      </div>
       {children}
     </div>
   );

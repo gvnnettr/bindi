@@ -109,6 +109,16 @@ class UpdateParentDto {
   @IsOptional() @IsString() @Length(10, 20) phone?: string;
 }
 
+class AdminCreateRequestDto {
+  @IsString({ each: true }) studentIds!: string[];
+  @IsString() city!: string;
+  @IsString() district!: string;
+  @IsString() neighborhood!: string;
+  @IsString() @Length(5, 300) address!: string;
+  @IsIn(['both', 'morning_only', 'afternoon_only']) pickupType!: string;
+  @IsOptional() @IsString() notes?: string;
+}
+
 @UseGuards(AdminJwtGuard)
 @Controller('admin')
 export class AdminController {
@@ -418,6 +428,12 @@ export class AdminController {
   @Post('parents/:id/students')
   addParentStudent(@Param('id') id: string, @Body() dto: AdminAddStudentDto) {
     return this.svc.adminAddStudentForParent(id, dto);
+  }
+
+  /** Admin adına veli için talep oluştur */
+  @Post('parents/:id/requests')
+  createParentRequest(@Param('id') id: string, @Body() dto: AdminCreateRequestDto) {
+    return this.svc.adminCreateRequestForParent(id, dto);
   }
 
   /** Velinin PIN'ini sıfırla + SMS */

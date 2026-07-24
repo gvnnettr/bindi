@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
-import { Between, MoreThan, Repository } from 'typeorm';
+import { Between, In, MoreThan, Repository } from 'typeorm';
 import * as argon2 from 'argon2';
 import {
   AdminUser,
@@ -38,6 +38,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SmsService } from '../sms/sms.service';
 import { MatchingService } from '../requests/matching.service';
 import * as crypto from 'crypto';
+import { DataSource } from 'typeorm';
 
 @Injectable()
 export class AdminService {
@@ -79,6 +80,7 @@ export class AdminService {
     private readonly notif: NotificationsService,
     private readonly sms: SmsService,
     private readonly matching: MatchingService,
+    private readonly ds: DataSource,
   ) {}
 
   async login(email: string, password: string) {
@@ -1776,6 +1778,87 @@ export class AdminService {
       );
     } catch {}
     return { ok: true, generatedPassword: password };
+  }
+
+  /** Admin adına veli için talep oluşturur (destek amaçlı) */
+  async adminCreateRequestForParent(parentId: string, input: {
+    studentIds: string[];
+    city: string;
+    district: string;
+    neighborhood: string;
+    address: string;
+    pickupType: string;
+    notes?: string;
+  }) {
+    const parent = await this.parents.findOne({ where: { id: parentId } });
+    if (!parent) throw new NotFoundException('Veli bulunamadı');
+    if (input.studentIds.length === 0) {
+      throw new BadRequestException('En az bir öğrenci seçin');
+    }
+    const students = await this.students.find({
+      where: { id: In(input.studentIds), parentId },
+    });
+    if (students.length !== input.studentIds.length) {
+      throw new BadRequestException('Bir veya birden fazla öğrenci bu veliye ait değil');
+    }
+    const schoolIds = Array.from(new Set(students.map((s) => s.schoolId).filter(Boolean) as string[]));
+
+    const magicToken = crypto.randomBytes(24).toString('hex');
+    const magicExpiresAt = new Date(Date.now() + 30 * 24 * 3600 * 1000);
+
+    const created = await this.ds.transaction(async (m) => {
+      const req = m.getRepository(ServiceRequest).create({
+        parentId,
+        city: input.city,
+        district: input.district,
+        neighborhood: input.neighborhood,
+        address: input.address,
+        pickupType: input.pickupType as any,
+        notes: input.notes ?? null,
+        status: REQUEST_STATUS.OPEN as any,
+        magicToken,
+        magicExpiresAt,
+      });
+      const saved = await m.getRepository(ServiceRequest).save(req);
+      for (const s of students) {
+        await m.getRepository(RequestStudent).save(
+          m.getRepository(RequestStudent).create({ request: saved, student: s }),
+        );
+      }
+      return saved;
+    });
+
+    // Servisçileri bildir (arka planda)
+    this.matching.findMatchingProviders({
+      schoolIds,
+      city: input.city,
+      district: input.district,
+      latitude: null,
+      longitude: null,
+    }).then(async (providers) => {
+      for (const p of providers) {
+        try {
+          await this.sms.send(
+            p.phone,
+            `Bindi: ${input.city}/${input.district} bölgesinde yeni bir talep (admin oluşturdu).`,
+          );
+        } catch {}
+      }
+      if (providers.length > 0) {
+        await this.notif.createMany(
+          providers.map((p) => ({
+            role: 'provider' as const,
+            recipientId: p.id,
+            type: 'request.created',
+            title: 'Yeni talep',
+            body: `${input.city}/${input.district} bölgesinde yeni okul servisi talebi`,
+            link: `/servisci/talepler/${created.id}`,
+          })),
+        );
+      }
+    }).catch(() => {});
+
+    return { id: created.id, notified: true };
   }
 
   /** Talep yenile: mevcut pending offers'ları rejected yap, matching yeniden çalıştır */

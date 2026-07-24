@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { apiGet, apiPatch, apiPost, apiDelete } from '@/lib/api';
 import { adminSession } from '@/lib/session';
-import { Button } from '@/components/ui';
+import { Button, Input as UiInput } from '@/components/ui';
 
 interface Detail {
   id: string;
@@ -76,6 +76,7 @@ type Tab =
   | 'sofor_belgeler'
   | 'abonelikler'
   | 'araclar'
+  | 'soforler'
   | 'okullar'
   | 'teklifler';
 
@@ -152,6 +153,48 @@ export default function ProviderDetailPage() {
     email: '',
     address: '',
   });
+  const [showAddVehicle, setShowAddVehicle] = useState(false);
+  const [showAddDriver, setShowAddDriver] = useState(false);
+
+  async function removeVehicle(vid: string, plate: string) {
+    if (!confirm(`${plate} plakalı araç silinsin mi?`)) return;
+    const token = adminSession.get();
+    if (!token) return;
+    try {
+      await apiDelete(`/admin/providers/${id}/vehicles/${vid}`, token);
+      setNotice('Araç silindi.');
+      setTimeout(() => setNotice(null), 2000);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function removeDriver(did: string, name: string) {
+    if (!confirm(`${name} adlı şoför silinsin mi?`)) return;
+    const token = adminSession.get();
+    if (!token) return;
+    try {
+      await apiDelete(`/admin/providers/${id}/drivers/${did}`, token);
+      setNotice('Şoför silindi.');
+      setTimeout(() => setNotice(null), 2000);
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function resetPassword() {
+    if (!confirm('PIN sıfırlansın mı? Yeni PIN telefonuna SMS ile gönderilecek.')) return;
+    const token = adminSession.get();
+    if (!token) return;
+    try {
+      const r = await apiPost<{ generatedPassword: string }>(`/admin/providers/${id}/reset-password`, {}, token);
+      alert(`PIN sıfırlandı: ${r.generatedPassword} — SMS gönderildi.`);
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  }
 
   async function load() {
     const token = adminSession.get();
@@ -415,6 +458,9 @@ export default function ProviderDetailPage() {
                 Pasif Et
               </Button>
             )}
+            <Button variant="secondary" onClick={resetPassword}>
+              🔑 PIN Sıfırla
+            </Button>
             <button
               onClick={removeProvider}
               className="inline-flex items-center rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100"
@@ -503,6 +549,9 @@ export default function ProviderDetailPage() {
         </TabButton>
         <TabButton active={tab === 'araclar'} onClick={() => setTab('araclar')}>
           Araçlar ({detail.vehicles.length})
+        </TabButton>
+        <TabButton active={tab === 'soforler'} onClick={() => setTab('soforler')}>
+          Şoförler ({driverDocs.length})
         </TabButton>
         <TabButton active={tab === 'okullar'} onClick={() => setTab('okullar')}>
           Okullar & Bölgeler ({detail.schools.length + detail.regions.length})
@@ -914,43 +963,126 @@ export default function ProviderDetailPage() {
       )}
 
       {tab === 'araclar' && (
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="border-b border-charcoal-100 bg-sand-50 text-left text-xs uppercase tracking-wider text-charcoal-500">
-              <tr>
-                <th className="px-6 py-3">Marka</th>
-                <th className="px-6 py-3">Model</th>
-                <th className="px-6 py-3">Yıl</th>
-                <th className="px-6 py-3">Plaka</th>
-                <th className="px-6 py-3">Koltuk</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-charcoal-100">
-              {detail.vehicles.map((v) => (
-                <tr key={v.id} className="hover:bg-sand-50/50">
-                  <td className="px-6 py-4 font-semibold text-charcoal-900">
-                    {v.brand}
-                  </td>
-                  <td className="px-6 py-4 text-charcoal-700">{v.model}</td>
-                  <td className="px-6 py-4 text-charcoal-700">{v.year ?? '—'}</td>
-                  <td className="px-6 py-4 font-mono text-charcoal-700">
-                    {v.plate}
-                  </td>
-                  <td className="px-6 py-4 text-charcoal-700">{v.seats ?? '—'}</td>
-                </tr>
-              ))}
-              {detail.vehicles.length === 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-charcoal-500">
+              Servisçi adına araç ekle/sil — admin destek amacıyla
+            </div>
+            <Button onClick={() => setShowAddVehicle(true)}>+ Araç Ekle</Button>
+          </div>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="border-b border-charcoal-100 bg-sand-50 text-left text-xs uppercase tracking-wider text-charcoal-500">
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="py-16 text-center text-sm text-charcoal-500"
-                  >
-                    Kayıtlı araç yok.
-                  </td>
+                  <th className="px-6 py-3">Marka</th>
+                  <th className="px-6 py-3">Model</th>
+                  <th className="px-6 py-3">Yıl</th>
+                  <th className="px-6 py-3">Plaka</th>
+                  <th className="px-6 py-3">Koltuk</th>
+                  <th className="px-6 py-3 text-right">İşlem</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-charcoal-100">
+                {detail.vehicles.map((v) => (
+                  <tr key={v.id} className="hover:bg-sand-50/50">
+                    <td className="px-6 py-4 font-semibold text-charcoal-900">
+                      {v.brand}
+                    </td>
+                    <td className="px-6 py-4 text-charcoal-700">{v.model}</td>
+                    <td className="px-6 py-4 text-charcoal-700">{v.year ?? '—'}</td>
+                    <td className="px-6 py-4 font-mono text-charcoal-700">
+                      {v.plate}
+                    </td>
+                    <td className="px-6 py-4 text-charcoal-700">{v.seats ?? '—'}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => removeVehicle(v.id, v.plate)}
+                        className="text-xs font-bold text-red-600 hover:underline"
+                      >
+                        🗑️ Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {detail.vehicles.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-16 text-center text-sm text-charcoal-500"
+                    >
+                      Kayıtlı araç yok.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'soforler' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-charcoal-500">
+              Servisçi adına şoför ekle/sil — belgeleri "Şoför Belgeleri" sekmesinden yönet
+            </div>
+            <Button onClick={() => setShowAddDriver(true)}>+ Şoför Ekle</Button>
+          </div>
+          <div className="card overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="border-b border-charcoal-100 bg-sand-50 text-left text-xs uppercase tracking-wider text-charcoal-500">
+                <tr>
+                  <th className="px-6 py-3">Ad Soyad</th>
+                  <th className="px-6 py-3">Telefon</th>
+                  <th className="px-6 py-3">Belge</th>
+                  <th className="px-6 py-3">Durum</th>
+                  <th className="px-6 py-3 text-right">İşlem</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-charcoal-100">
+                {driverDocs.map((g) => (
+                  <tr key={g.driver.id} className="hover:bg-sand-50/50">
+                    <td className="px-6 py-4 font-semibold text-charcoal-900">
+                      {g.driver.name}
+                    </td>
+                    <td className="px-6 py-4 font-mono text-charcoal-700 text-xs">
+                      {g.driver.phone}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-xs text-charcoal-500">
+                        {g.documents.filter((d) => d.document).length}/{g.documents.length} yüklü
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {g.driver.active ? (
+                        <span className="badge-success">Aktif</span>
+                      ) : (
+                        <span className="badge-neutral">Pasif</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => removeDriver(g.driver.id, g.driver.name)}
+                        className="text-xs font-bold text-red-600 hover:underline"
+                      >
+                        🗑️ Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {driverDocs.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-16 text-center text-sm text-charcoal-500"
+                    >
+                      Kayıtlı şoför yok.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -1022,6 +1154,112 @@ export default function ProviderDetailPage() {
           </table>
         </div>
       )}
+
+      {showAddVehicle && (
+        <AddVehicleModal
+          providerId={id}
+          onClose={() => setShowAddVehicle(false)}
+          onDone={() => { setShowAddVehicle(false); setNotice('Araç eklendi.'); setTimeout(() => setNotice(null), 2000); load(); }}
+        />
+      )}
+
+      {showAddDriver && (
+        <AddDriverModal
+          providerId={id}
+          onClose={() => setShowAddDriver(false)}
+          onDone={() => { setShowAddDriver(false); setNotice('Şoför eklendi.'); setTimeout(() => setNotice(null), 2000); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function AddVehicleModal({ providerId, onClose, onDone }: { providerId: string; onClose: () => void; onDone: () => void }) {
+  const [brand, setBrand] = useState('');
+  const [model, setModel] = useState('');
+  const [year, setYear] = useState('2020');
+  const [plate, setPlate] = useState('');
+  const [seats, setSeats] = useState('16');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!brand.trim() || !model.trim() || !plate.trim()) { setError('Marka, model ve plaka zorunlu'); return; }
+    const y = Number(year); const s = Number(seats);
+    if (!y || y < 1990 || y > 2100) { setError('Yıl geçersiz'); return; }
+    if (!s || s < 1 || s > 60) { setError('Koltuk sayısı 1-60 arası'); return; }
+    setLoading(true); setError(null);
+    try {
+      const token = adminSession.get();
+      if (!token) throw new Error('Oturum yok');
+      await apiPost(`/admin/providers/${providerId}/vehicles`, {
+        brand: brand.trim(), model: model.trim(), year: y, plate: plate.trim().toUpperCase(), seats: s,
+      }, token);
+      onDone();
+    } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 space-y-3">
+        <div className="flex items-start justify-between">
+          <h2 className="text-xl font-bold text-charcoal-900">Yeni Araç Ekle</h2>
+          <button onClick={onClose} className="text-charcoal-400 text-xl">✕</button>
+        </div>
+        {error && <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">{error}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="text-xs font-bold text-charcoal-500 uppercase">Marka *</label><UiInput value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Mercedes" /></div>
+          <div><label className="text-xs font-bold text-charcoal-500 uppercase">Model *</label><UiInput value={model} onChange={(e) => setModel(e.target.value)} placeholder="Sprinter" /></div>
+          <div><label className="text-xs font-bold text-charcoal-500 uppercase">Yıl</label><UiInput type="number" value={year} onChange={(e) => setYear(e.target.value)} /></div>
+          <div><label className="text-xs font-bold text-charcoal-500 uppercase">Koltuk</label><UiInput type="number" value={seats} onChange={(e) => setSeats(e.target.value)} /></div>
+        </div>
+        <div><label className="text-xs font-bold text-charcoal-500 uppercase">Plaka *</label><UiInput value={plate} onChange={(e) => setPlate(e.target.value)} placeholder="52 ABC 123" /></div>
+        <div className="flex gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1">Vazgeç</Button>
+          <Button onClick={submit} disabled={loading} className="flex-1">{loading ? 'Ekleniyor...' : 'Ekle'}</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddDriverModal({ providerId, onClose, onDone }: { providerId: string; onClose: () => void; onDone: () => void }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [note, setNote] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!name.trim() || !phone.trim()) { setError('Ad ve telefon zorunlu'); return; }
+    setLoading(true); setError(null);
+    try {
+      const token = adminSession.get();
+      if (!token) throw new Error('Oturum yok');
+      await apiPost(`/admin/providers/${providerId}/drivers`, {
+        name: name.trim(), phone: phone.trim(), note: note.trim() || undefined,
+      }, token);
+      onDone();
+    } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6 space-y-3">
+        <div className="flex items-start justify-between">
+          <h2 className="text-xl font-bold text-charcoal-900">Yeni Şoför Ekle</h2>
+          <button onClick={onClose} className="text-charcoal-400 text-xl">✕</button>
+        </div>
+        {error && <div className="rounded bg-red-50 border border-red-200 p-3 text-sm text-red-800">{error}</div>}
+        <div><label className="text-xs font-bold text-charcoal-500 uppercase">Ad Soyad *</label><UiInput value={name} onChange={(e) => setName(e.target.value)} placeholder="Örn: Mehmet Kaya" /></div>
+        <div><label className="text-xs font-bold text-charcoal-500 uppercase">Telefon *</label><UiInput value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="05XX XXX XX XX" /></div>
+        <div><label className="text-xs font-bold text-charcoal-500 uppercase">Not</label><UiInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="Opsiyonel not" /></div>
+        <div className="text-xs text-charcoal-500 pt-1">Ehliyet, SRC vs. belgeler "Şoför Belgeleri" sekmesinden yüklenir.</div>
+        <div className="flex gap-2 pt-2">
+          <Button variant="secondary" onClick={onClose} className="flex-1">Vazgeç</Button>
+          <Button onClick={submit} disabled={loading} className="flex-1">{loading ? 'Ekleniyor...' : 'Ekle'}</Button>
+        </div>
+      </div>
     </div>
   );
 }
