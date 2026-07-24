@@ -210,8 +210,14 @@ export default function OtpScreen() {
 function CodeBoxes({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const inputRef = useRef<TextInput>(null);
   const boxes = Array.from({ length: 6 }, (_, i) => value[i] ?? '');
+
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 250);
+    return () => clearTimeout(t);
+  }, []);
+
   return (
-    <Pressable onPress={() => inputRef.current?.focus()} style={{ alignSelf: 'stretch' }}>
+    <View style={{ alignSelf: 'stretch' }}>
       <View style={styles.codeRow}>
         {boxes.map((c, i) => (
           <View key={i} style={[styles.codeBox, c && styles.codeBoxFilled]}>
@@ -221,14 +227,17 @@ function CodeBoxes({ value, onChange }: { value: string; onChange: (v: string) =
       </View>
       <TextInput
         ref={inputRef}
-        style={styles.hiddenInput}
+        style={styles.overlayInput}
         value={value}
         onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, 6))}
         keyboardType="number-pad"
         maxLength={6}
-        autoFocus
+        caretHidden
+        selectionColor="transparent"
+        textContentType="oneTimeCode"
+        autoComplete="sms-otp"
       />
-    </Pressable>
+    </View>
   );
 }
 
@@ -236,7 +245,7 @@ function PinBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
   const inputRef = useRef<TextInput>(null);
   const boxes = Array.from({ length: 6 }, (_, i) => (value[i] ? '•' : ''));
   return (
-    <Pressable onPress={() => inputRef.current?.focus()} style={{ alignSelf: 'stretch' }}>
+    <View style={{ alignSelf: 'stretch' }}>
       <View style={styles.codeRow}>
         {boxes.map((c, i) => (
           <View key={i} style={[styles.codeBox, c && styles.codeBoxFilled]}>
@@ -246,14 +255,16 @@ function PinBoxes({ value, onChange }: { value: string; onChange: (v: string) =>
       </View>
       <TextInput
         ref={inputRef}
-        style={styles.hiddenInput}
+        style={styles.overlayInput}
         value={value}
         onChangeText={(t) => onChange(t.replace(/\D/g, '').slice(0, 6))}
         keyboardType="number-pad"
         maxLength={6}
         secureTextEntry
+        caretHidden
+        selectionColor="transparent"
       />
-    </Pressable>
+    </View>
   );
 }
 
@@ -299,11 +310,16 @@ const styles = StyleSheet.create({
   },
   codeBoxFilled: { borderColor: colors.primaryDark, backgroundColor: colors.primarySoft },
   codeText: { fontSize: 22, fontWeight: '800', color: colors.dark },
-  hiddenInput: {
+  overlayInput: {
     position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
+    top: 16,
+    left: 0,
+    right: 0,
+    height: 54,
+    color: 'transparent',
+    backgroundColor: 'transparent',
+    textAlign: 'center',
+    fontSize: 22,
   },
   pinBox: { marginTop: 24, alignSelf: 'stretch' },
   pinLabel: { fontSize: 13, fontWeight: '700', color: colors.dark, textAlign: 'center' },
