@@ -448,6 +448,59 @@ export class AdminController {
     return this.svc.adminRefreshRequest(id);
   }
 
+  /** Admin adına servisçi için şirket belgesi kaydı (dosya /providers/upload/document'tan gelen URL) */
+  @Post('providers/:id/documents')
+  addProviderDocument(
+    @Param('id') id: string,
+    @Body() dto: {
+      definitionId: string;
+      fileUrl: string;
+      originalName: string;
+      issuedAt?: string;
+      expiresAt?: string;
+    },
+  ) {
+    return this.svc.adminAddProviderDocument(id, dto);
+  }
+
+  /** Admin adına araç belgesi */
+  @Post('providers/:id/vehicles/:vid/documents')
+  addVehicleDocument(
+    @Param('id') id: string,
+    @Param('vid') vid: string,
+    @Body() dto: {
+      definitionId: string;
+      fileUrl: string;
+      originalName: string;
+      issuedAt?: string;
+      expiresAt?: string;
+    },
+  ) {
+    return this.svc.adminAddVehicleDocument(id, vid, dto);
+  }
+
+  /** Admin adına şoför belgesi */
+  @Post('providers/:id/drivers/:did/documents')
+  addDriverDocument(
+    @Param('id') id: string,
+    @Param('did') did: string,
+    @Body() dto: {
+      definitionId: string;
+      fileUrl: string;
+      originalName: string;
+      issuedAt?: string;
+      expiresAt?: string;
+    },
+  ) {
+    return this.svc.adminAddDriverDocument(id, did, dto);
+  }
+
+  /** Belge tanımı listesi (admin için) — client seçim için */
+  @Get('document-definitions')
+  listDocDefinitions() {
+    return this.svc.listAllDocDefinitions();
+  }
+
   @Get('schools')
   schools() {
     return this.svc.listSchools();

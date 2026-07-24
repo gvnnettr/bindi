@@ -10,6 +10,7 @@ import {
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { NotificationBell } from '../../../../src/components/NotificationBell';
 import { api, ApiError } from '../../../../src/api/client';
 import { useAuth } from '../../../../src/state/auth';
 import { colors } from '../../../../src/theme/colors';
@@ -85,8 +86,11 @@ export default function TaleplerScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Talepler</Text>
-        <Text style={styles.sub}>Bölgende yeni veli talepleri</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Talepler</Text>
+          <Text style={styles.sub}>Bölgende yeni veli talepleri</Text>
+        </View>
+        <NotificationBell />
       </View>
 
       <View style={styles.filterRow}>
@@ -198,6 +202,8 @@ function FilterChip({ label, active, count, onPress }: { label: string; active: 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 12,

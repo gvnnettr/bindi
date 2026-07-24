@@ -880,21 +880,56 @@ export class AdminService {
     if (!valid.includes(status)) throw new BadRequestException('Geçersiz durum');
     const p = await this.providers.findOne({ where: { id: providerId } });
     if (!p) throw new NotFoundException();
+    const previousStatus = p.status;
     p.status = status as any;
     await this.providers.save(p);
-    await this.notif.create({
-      role: 'provider',
-      recipientId: p.id,
-      type: 'provider.status_changed',
-      title:
-        status === 'active'
-          ? 'Hesabınız aktif edildi'
-          : status === 'suspended'
-            ? 'Hesabınız askıya alındı'
-            : 'Hesap durumunuz güncellendi',
-      body: `Yeni durum: ${status}`,
-      link: '/servisci',
-    });
+
+    // In-app + push bildirimi
+    const isActivating = status === 'active' && previousStatus !== 'active';
+    const isSuspending = status === 'suspended' && previousStatus !== 'suspended';
+
+    if (isActivating || isSuspending) {
+      const title = isActivating
+        ? '✅ Hesabınız aktif edildi'
+        : '⚠️ Hesabınız askıya alındı';
+      const body = isActivating
+        ? 'Bindi hesabınız yönetici tarafından onaylandı. Artık talep alıp teklif verebilirsiniz.'
+        : 'Hesabınız yönetici tarafından askıya alındı. Bilgi için destek@bindi.com.tr ile iletişime geçin.';
+
+      // Push + in-app
+      try {
+        await this.notif.create({
+          role: 'provider',
+          recipientId: p.id,
+          type: isActivating ? 'provider.activated' : 'provider.suspended',
+          title,
+          body,
+          link: '/servisci',
+        });
+      } catch {}
+
+      // SMS
+      try {
+        await this.sms.send(
+          p.phone,
+          isActivating
+            ? 'Bindi: Hesabiniz aktif edildi. Uygulamadan talepleri gorebilirsiniz.'
+            : 'Bindi: Hesabiniz gecici olarak askiya alindi. Destek: destek@bindi.com.tr',
+        );
+      } catch {}
+    } else {
+      // Diğer status değişikliği (pending_approval, pending_payment) için sadece in-app
+      try {
+        await this.notif.create({
+          role: 'provider',
+          recipientId: p.id,
+          type: 'provider.status_changed',
+          title: 'Hesap durumunuz güncellendi',
+          body: `Yeni durum: ${status}`,
+          link: '/servisci',
+        });
+      } catch {}
+    }
     return { ok: true };
   }
 
@@ -1859,6 +1894,133 @@ export class AdminService {
     }).catch(() => {});
 
     return { id: created.id, notified: true };
+  }
+
+  // ==================== ADMIN BELGE YÜKLEME ====================
+
+  /** Admin adına şirket belgesi yükle (fileUrl önceden /providers/upload/document ile alınmış olmalı) */
+  async adminAddProviderDocument(providerId: string, input: {
+    definitionId: string; fileUrl: string; originalName: string;
+    issuedAt?: string; expiresAt?: string;
+  }) {
+    const p = await this.providers.findOne({ where: { id: providerId } });
+    if (!p) throw new NotFoundException('Servisçi bulunamadı');
+    const def = await this.docDefs.findOne({ where: { id: input.definitionId } });
+    if (!def) throw new BadRequestException('Belge tanımı bulunamadı');
+
+    let doc = await this.providerDocs.findOne({
+      where: { providerId, definitionId: input.definitionId },
+    });
+    if (doc) {
+      doc.fileUrl = input.fileUrl;
+      doc.originalName = input.originalName;
+      doc.issuedAt = input.issuedAt ? new Date(input.issuedAt) : null;
+      doc.expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+      doc.status = 'approved' as any; // Admin yüklediği için direkt onaylı
+      doc.rejectionReason = null;
+      doc.reviewedAt = new Date();
+      doc.reviewedBy = 'admin' as any;
+    } else {
+      doc = this.providerDocs.create({
+        providerId,
+        definitionId: input.definitionId,
+        fileUrl: input.fileUrl,
+        originalName: input.originalName,
+        issuedAt: input.issuedAt ? new Date(input.issuedAt) : null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        status: 'approved' as any,
+        reviewedAt: new Date(),
+        reviewedBy: 'admin' as any,
+      });
+    }
+    return this.providerDocs.save(doc);
+  }
+
+  /** Admin adına araç belgesi yükle */
+  async adminAddVehicleDocument(providerId: string, vehicleId: string, input: {
+    definitionId: string; fileUrl: string; originalName: string;
+    issuedAt?: string; expiresAt?: string;
+  }) {
+    const v = await this.vehicles.findOne({ where: { id: vehicleId, providerId } });
+    if (!v) throw new NotFoundException('Araç bulunamadı');
+    let doc = await this.vehicleDocs.findOne({
+      where: { vehicleId, definitionId: input.definitionId },
+    });
+    if (doc) {
+      doc.fileUrl = input.fileUrl;
+      doc.originalName = input.originalName;
+      doc.issuedAt = input.issuedAt ? new Date(input.issuedAt) : null;
+      doc.expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+      doc.status = 'approved' as any;
+      doc.rejectionReason = null;
+      doc.reviewedAt = new Date();
+      doc.reviewedBy = 'admin' as any;
+    } else {
+      doc = this.vehicleDocs.create({
+        vehicleId,
+        definitionId: input.definitionId,
+        fileUrl: input.fileUrl,
+        originalName: input.originalName,
+        issuedAt: input.issuedAt ? new Date(input.issuedAt) : null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        status: 'approved' as any,
+        reviewedAt: new Date(),
+        reviewedBy: 'admin' as any,
+      });
+    }
+    return this.vehicleDocs.save(doc);
+  }
+
+  /** Admin adına şoför belgesi yükle */
+  async adminAddDriverDocument(providerId: string, driverId: string, input: {
+    definitionId: string; fileUrl: string; originalName: string;
+    issuedAt?: string; expiresAt?: string;
+  }) {
+    const d = await this.drivers.findOne({ where: { id: driverId, providerId } });
+    if (!d) throw new NotFoundException('Şoför bulunamadı');
+    let doc = await this.driverDocs.findOne({
+      where: { driverId, definitionId: input.definitionId },
+    });
+    if (doc) {
+      doc.fileUrl = input.fileUrl;
+      doc.originalName = input.originalName;
+      doc.issuedAt = input.issuedAt ? new Date(input.issuedAt) : null;
+      doc.expiresAt = input.expiresAt ? new Date(input.expiresAt) : null;
+      doc.status = 'approved' as any;
+      doc.rejectionReason = null;
+      doc.reviewedAt = new Date();
+      doc.reviewedBy = 'admin' as any;
+    } else {
+      doc = this.driverDocs.create({
+        driverId,
+        definitionId: input.definitionId,
+        fileUrl: input.fileUrl,
+        originalName: input.originalName,
+        issuedAt: input.issuedAt ? new Date(input.issuedAt) : null,
+        expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+        status: 'approved' as any,
+        reviewedAt: new Date(),
+        reviewedBy: 'admin' as any,
+      });
+    }
+    return this.driverDocs.save(doc);
+  }
+
+  /** Belge tanımlarını scope'a göre grupla döndür */
+  async listAllDocDefinitions() {
+    const defs = await this.docDefs.find({
+      where: { active: true },
+      order: { sortOrder: 'ASC' },
+    });
+    return defs.map((d) => ({
+      id: d.id,
+      code: d.code,
+      name: d.name,
+      scope: d.scope,
+      required: d.required,
+      requiresExpiry: d.requiresExpiry,
+      description: d.description,
+    }));
   }
 
   /** Talep yenile: mevcut pending offers'ları rejected yap, matching yeniden çalıştır */

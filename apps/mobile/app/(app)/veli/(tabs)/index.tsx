@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { api, ApiError } from '../../../../src/api/client';
 import { useAuth } from '../../../../src/state/auth';
+import { NotificationBell } from '../../../../src/components/NotificationBell';
 import { colors } from '../../../../src/theme/colors';
 
 interface ParentInfo {
@@ -145,6 +146,7 @@ export default function VeliAnaScreen() {
                 {me?.name?.split(' ')[0] ?? '—'}
               </Text>
             </View>
+            <NotificationBell color={colors.dark} />
           </View>
 
           <Pressable
