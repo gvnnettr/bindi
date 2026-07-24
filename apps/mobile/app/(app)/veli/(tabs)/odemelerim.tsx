@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { api, ApiError } from '../../../../src/api/client';
 import { API_URL } from '../../../../src/api/config';
+import { uploadFile } from '../../../../src/api/upload';
 import { useAuth } from '../../../../src/state/auth';
 import { Button, ErrorBanner } from '../../../../src/components/ui';
 import { colors } from '../../../../src/theme/colors';
@@ -235,38 +236,12 @@ function ReceiptUploadModal({
     setLoading(true);
     setError(null);
     try {
-      // iOS local URI (file:///...) — HEIC ihtimali için mimeType tespit et
-      const ext = uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const mimeType =
-        ext === 'png' ? 'image/png' :
-        ext === 'heic' ? 'image/heic' :
-        ext === 'webp' ? 'image/webp' :
-        ext === 'pdf' ? 'application/pdf' :
-        'image/jpeg';
-      const form = new FormData();
-      form.append('file', {
-        uri,
-        name: `receipt-${Date.now()}.${ext === 'jpeg' ? 'jpg' : ext}`,
-        type: mimeType,
-      } as any);
-      if (note) form.append('parentNote', note);
-      const res = await fetch(`${API_URL}/parent/payments/${payment.id}/receipt`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: 'application/json',
-          // Content-Type header koyma — RN otomatik boundary üretir
-        },
-        body: form,
-      });
-      if (!res.ok) {
-        let msg = `HTTP ${res.status}`;
-        try {
-          const text = await res.text();
-          msg = JSON.parse(text)?.message ?? text.slice(0, 120);
-        } catch {}
-        throw new Error(msg);
-      }
+      const uploaded = await uploadFile(uri);
+      await api.post(
+        `/parent/payments/${payment.id}/receipt/register`,
+        { fileUrl: uploaded.fileUrl, parentNote: note || undefined },
+        token,
+      );
       setUri(null);
       setNote('');
       onDone();

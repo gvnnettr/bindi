@@ -8,6 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { api, ApiError } from '../../../../src/api/client';
 import { API_URL } from '../../../../src/api/config';
+import { uploadFile } from '../../../../src/api/upload';
 import { useAuth } from '../../../../src/state/auth';
 import { Button, ErrorBanner, InfoBanner, Input } from '../../../../src/components/ui';
 import { DateField } from '../../../../src/components/DateField';
@@ -232,17 +233,18 @@ function UploadModal({
     setLoading(true);
     setError(null);
     try {
-      const form = new FormData();
-      form.append('file', { uri, name: `doc-${Date.now()}.jpg`, type: 'image/jpeg' } as any);
-      form.append('definitionId', row.definition.id);
-      if (issuedAt) form.append('issuedAt', issuedAt);
-      if (expiresAt) form.append('expiresAt', expiresAt);
-      const res = await fetch(`${API_URL}/me/drivers/${driverId}/documents`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-      if (!res.ok) throw new Error(JSON.parse(await res.text())?.message ?? `HTTP ${res.status}`);
+      const uploaded = await uploadFile(uri);
+      await api.post(
+        `/me/drivers/${driverId}/documents/register`,
+        {
+          definitionId: row.definition.id,
+          fileUrl: uploaded.fileUrl,
+          originalName: uploaded.originalName,
+          issuedAt: issuedAt || undefined,
+          expiresAt: expiresAt || undefined,
+        },
+        token,
+      );
       setUri(null); setIssuedAt(''); setExpiresAt('');
       onDone();
     } catch (e) {

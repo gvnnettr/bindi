@@ -85,8 +85,13 @@ export default function TekliflerimScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Tekliflerim</Text>
-        <Text style={styles.sub}>Verdiğin tekliflerin durumu</Text>
+        <Pressable onPress={() => router.back()} hitSlop={12} style={styles.back}>
+          <Text style={styles.backText}>‹</Text>
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Tekliflerim</Text>
+          <Text style={styles.sub}>Verdiğin tekliflerin durumu</Text>
+        </View>
       </View>
 
       <View style={styles.tabRow}>
@@ -184,7 +189,9 @@ function StatusBadge({ status }: { status: OfferRow['status'] }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: { paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12 },
+  back: { width: 30, justifyContent: 'center', alignItems: 'center' },
+  backText: { fontSize: 32, color: colors.dark, fontWeight: '600' },
   title: { fontSize: 24, fontWeight: '800', color: colors.dark, letterSpacing: -0.5 },
   sub: { fontSize: 12, color: colors.muted, marginTop: 2 },
   tabRow: {

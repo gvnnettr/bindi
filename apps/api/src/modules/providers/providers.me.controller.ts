@@ -210,6 +210,32 @@ export class ProvidersMeController {
     });
   }
 
+  /** Alternatif: iki adımlı upload (JSON body) — FormData bug'ından kurtarır */
+  @Post('vehicles/:id/documents/register')
+  async registerVehicleDoc(
+    @Req() req: ProviderRequest,
+    @Param('id') vehicleId: string,
+    @Body() dto: {
+      definitionId: string;
+      fileUrl: string;
+      originalName: string;
+      issuedAt?: string;
+      expiresAt?: string;
+      note?: string;
+    },
+  ) {
+    if (!dto.fileUrl) throw new BadRequestException('fileUrl gerekli');
+    if (!dto.definitionId) throw new BadRequestException('Belge tanımı seçilmedi');
+    return this.svc.addVehicleDocument(req.provider.id, vehicleId, {
+      definitionId: dto.definitionId,
+      fileUrl: dto.fileUrl,
+      originalName: dto.originalName,
+      issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+      note: dto.note ?? null,
+    });
+  }
+
   @Delete('vehicles/:vid/documents/:did')
   deleteDoc(
     @Req() req: ProviderRequest,
@@ -285,6 +311,29 @@ export class ProvidersMeController {
       originalName: file.originalname,
       issuedAt: meta.issuedAt ? new Date(meta.issuedAt) : null,
       expiresAt: meta.expiresAt ? new Date(meta.expiresAt) : null,
+    });
+  }
+
+  /** Alternatif: iki adımlı upload — file /providers/upload/document ile önceden yüklenmiş, sadece metadata + URL yolla */
+  @Post('documents/register')
+  async registerCompanyDoc(
+    @Req() req: ProviderRequest,
+    @Body() dto: {
+      definitionId: string;
+      fileUrl: string;
+      originalName: string;
+      issuedAt?: string;
+      expiresAt?: string;
+    },
+  ) {
+    if (!dto.fileUrl) throw new BadRequestException('fileUrl gerekli');
+    if (!dto.definitionId) throw new BadRequestException('Belge tanımı seçilmedi');
+    return this.svc.upsertCompanyDocument(req.provider.id, {
+      definitionId: dto.definitionId,
+      fileUrl: dto.fileUrl,
+      originalName: dto.originalName,
+      issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
     });
   }
 

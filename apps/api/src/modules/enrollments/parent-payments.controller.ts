@@ -82,4 +82,18 @@ export class ParentPaymentsController {
       parentNote: dto.parentNote,
     });
   }
+
+  /** Alternatif: iki adımlı upload — dosya /providers/upload/document ile önceden yüklenmiş */
+  @Post(':id/receipt/register')
+  async registerReceipt(
+    @Req() req: ParentRequest,
+    @Param('id') paymentId: string,
+    @Body() dto: { fileUrl: string; parentNote?: string },
+  ) {
+    if (!dto.fileUrl) throw new BadRequestException('fileUrl gerekli');
+    return this.svc.submitReceiptByParent(req.parent.id, paymentId, {
+      receiptUrl: dto.fileUrl,
+      parentNote: dto.parentNote,
+    });
+  }
 }

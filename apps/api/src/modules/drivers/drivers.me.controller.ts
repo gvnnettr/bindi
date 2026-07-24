@@ -133,6 +133,30 @@ export class DriversMeController {
     });
   }
 
+  /** Alternatif: iki adımlı upload (JSON body) — FormData bug'ından kurtarır */
+  @Post(':id/documents/register')
+  async registerDoc(
+    @Req() req: ProviderRequest,
+    @Param('id') id: string,
+    @Body() dto: {
+      definitionId: string;
+      fileUrl: string;
+      originalName: string;
+      issuedAt?: string;
+      expiresAt?: string;
+    },
+  ) {
+    if (!dto.fileUrl) throw new BadRequestException('fileUrl gerekli');
+    if (!dto.definitionId) throw new BadRequestException('Belge tanımı seçilmedi');
+    return this.svc.upsertDocument(req.provider.id, id, {
+      definitionId: dto.definitionId,
+      fileUrl: dto.fileUrl,
+      originalName: dto.originalName,
+      issuedAt: dto.issuedAt ? new Date(dto.issuedAt) : null,
+      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+    });
+  }
+
   @Delete(':id/documents/:docId')
   deleteDoc(
     @Req() req: ProviderRequest,
