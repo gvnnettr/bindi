@@ -41,22 +41,17 @@ function periodLabel(period: string): string {
 }
 
 export default function KazancRaporuScreen() {
-  const { active } = useTakipPaket();
-  return (
-    <TakipGate
-      active={active}
-      featureName="Kazanç Raporu"
-      featureDesc="12 aylık gelir grafiği ve ödeme istatistikleri için Takip Paketi'ne ihtiyacın var."
-    >
-      <KazancContent />
-    </TakipGate>
-  );
+  // Ödemeler ekranı her servisçiye açık (dekont onay + hatırlatma iş akışı için temel)
+  // Grafik + detay kısmı Takip Paketi olmayanlara sadece CTA gösterir (aşağıda active kontrolü)
+  return <KazancContent />;
 }
 
 function KazancContent() {
   const { token } = useAuth();
+  const { active: takipActive } = useTakipPaket();
   const [data, setData] = useState<EarningsReport | null>(null);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [reviewingPayment, setReviewingPayment] = useState<PaymentItem | null>(null);
@@ -64,15 +59,19 @@ function KazancContent() {
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const [r, p] = await Promise.all([
-        api.get<EarningsReport>('/me/earnings/report', token),
-        api.get<PaymentItem[]>('/me/payments', token),
-      ]);
-      setData(r);
+      // Payments her servisçiye açık (dekont onayı iş akışı)
+      const p = await api.get<PaymentItem[]>('/me/payments', token);
       setPayments(p);
+      // Kazanç raporu Takip Paketi'ne bağlı — hata verirse sessiz atla
+      try {
+        const r = await api.get<EarningsReport>('/me/earnings/report', token);
+        setData(r);
+      } catch {}
       setError(null);
+      setLoaded(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
+      setLoaded(true);
     }
   }, [token]);
 
@@ -135,7 +134,7 @@ function KazancContent() {
         <View style={{ width: 32 }} />
       </View>
 
-      {!data ? (
+      {!loaded ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.muted} />
           {error && <Text style={styles.errorText}>{error}</Text>}
@@ -145,26 +144,39 @@ function KazancContent() {
           contentContainerStyle={styles.body}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.dark} />}
         >
-          <View style={styles.hero}>
-            <Text style={styles.heroLabel}>Toplam Kazanç (Son 12 Ay)</Text>
-            <Text style={styles.heroValue}>₺{data.totalPaid.toLocaleString('tr-TR')}</Text>
-            <View style={styles.heroMeta}>
-              <Text style={styles.heroSub}>{data.paidCount} ödeme alındı</Text>
-            </View>
-          </View>
+          {data && (
+            <>
+              <View style={styles.hero}>
+                <Text style={styles.heroLabel}>Toplam Kazanç (Son 12 Ay)</Text>
+                <Text style={styles.heroValue}>₺{data.totalPaid.toLocaleString('tr-TR')}</Text>
+                <View style={styles.heroMeta}>
+                  <Text style={styles.heroSub}>{data.paidCount} ödeme alındı</Text>
+                </View>
+              </View>
 
-          <View style={styles.gridRow}>
-            <View style={[styles.statCard, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-              <Text style={styles.statLabel}>Bekleyen</Text>
-              <Text style={[styles.statValue, { color: '#78350F' }]}>₺{data.pendingAmount.toLocaleString('tr-TR')}</Text>
-              <Text style={styles.statSub}>{data.unpaidCount} ödeme</Text>
+              <View style={styles.gridRow}>
+                <View style={[styles.statCard, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                  <Text style={styles.statLabel}>Bekleyen</Text>
+                  <Text style={[styles.statValue, { color: '#78350F' }]}>₺{data.pendingAmount.toLocaleString('tr-TR')}</Text>
+                  <Text style={styles.statSub}>{data.unpaidCount} ödeme</Text>
+                </View>
+                <View style={[styles.statCard, { backgroundColor: colors.successSoft, borderColor: '#A7F3D0' }]}>
+                  <Text style={styles.statLabel}>Ödendi</Text>
+                  <Text style={[styles.statValue, { color: '#065F46' }]}>{data.paidCount}</Text>
+                  <Text style={styles.statSub}>işlem</Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          {!data && payments.length === 0 && (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>Henüz ödeme yok</Text>
+              <Text style={styles.emptySub}>
+                Bir veli servisçini seçip ödeme yaptığında burada görünecek.
+              </Text>
             </View>
-            <View style={[styles.statCard, { backgroundColor: colors.successSoft, borderColor: '#A7F3D0' }]}>
-              <Text style={styles.statLabel}>Ödendi</Text>
-              <Text style={[styles.statValue, { color: '#065F46' }]}>{data.paidCount}</Text>
-              <Text style={styles.statSub}>işlem</Text>
-            </View>
-          </View>
+          )}
 
           {submittedPayments.length > 0 && (
             <>
@@ -247,47 +259,65 @@ function KazancContent() {
             </>
           )}
 
-          <Text style={styles.sectionTitle}>Aylık Gelir</Text>
-          {data.monthly.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Text style={styles.emptyTitle}>Henüz ödeme geliri yok</Text>
-              <Text style={styles.emptySub}>Öğrenci kayıtlarından ödemeler geldikçe burada aylık gelir grafiğin oluşacak.</Text>
-            </View>
+          {data ? (
+            <>
+              <Text style={styles.sectionTitle}>Aylık Gelir</Text>
+              {data.monthly.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyTitle}>Henüz ödeme geliri yok</Text>
+                  <Text style={styles.emptySub}>Öğrenci kayıtlarından ödemeler geldikçe burada aylık gelir grafiğin oluşacak.</Text>
+                </View>
+              ) : (
+                <View style={styles.chartBox}>
+                  <View style={styles.chartBars}>
+                    {data.monthly.map((m) => {
+                      const h = (m.revenue / maxRevenue) * 130;
+                      return (
+                        <View key={m.period} style={styles.barCol}>
+                          <View style={styles.barWrap}>
+                            <View style={[styles.bar, { height: Math.max(4, h) }]} />
+                          </View>
+                          <Text style={styles.barLabel}>{periodLabel(m.period)}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={styles.chartLegend}>
+                    <Text style={styles.legendText}>
+                      En yüksek: ₺{maxRevenue.toLocaleString('tr-TR')}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.sectionTitle}>Ay ay detay</Text>
+              <View style={styles.detailBox}>
+                {data.monthly.length === 0 && <Text style={styles.emptySub}>Kayıt yok</Text>}
+                {data.monthly.slice().reverse().map((m) => (
+                  <View key={m.period} style={styles.detailRow}>
+                    <Text style={styles.detailPeriod}>{m.period}</Text>
+                    <View style={{ flex: 1 }} />
+                    <Text style={styles.detailCount}>{m.paymentCount} ödeme</Text>
+                    <Text style={styles.detailRevenue}>₺{m.revenue.toLocaleString('tr-TR')}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
           ) : (
-            <View style={styles.chartBox}>
-              <View style={styles.chartBars}>
-                {data.monthly.map((m) => {
-                  const h = (m.revenue / maxRevenue) * 130;
-                  return (
-                    <View key={m.period} style={styles.barCol}>
-                      <View style={styles.barWrap}>
-                        <View style={[styles.bar, { height: Math.max(4, h) }]} />
-                      </View>
-                      <Text style={styles.barLabel}>{periodLabel(m.period)}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-              <View style={styles.chartLegend}>
-                <Text style={styles.legendText}>
-                  En yüksek: ₺{maxRevenue.toLocaleString('tr-TR')}
-                </Text>
-              </View>
+            <View style={styles.upgradeBox}>
+              <Text style={styles.upgradeIcon}>📊</Text>
+              <Text style={styles.upgradeTitle}>Kazanç Raporu · Takip Paketi</Text>
+              <Text style={styles.upgradeSub}>
+                12 aylık gelir grafiği, aylık detay ve trend analizi için Takip Paketi al.
+              </Text>
+              <Pressable
+                onPress={() => router.push('/(app)/servisci/menu')}
+                style={styles.upgradeCta}
+              >
+                <Text style={styles.upgradeCtaText}>Menü → Paketim & Ödeme</Text>
+              </Pressable>
             </View>
           )}
-
-          <Text style={styles.sectionTitle}>Ay ay detay</Text>
-          <View style={styles.detailBox}>
-            {data.monthly.length === 0 && <Text style={styles.emptySub}>Kayıt yok</Text>}
-            {data.monthly.slice().reverse().map((m) => (
-              <View key={m.period} style={styles.detailRow}>
-                <Text style={styles.detailPeriod}>{m.period}</Text>
-                <View style={{ flex: 1 }} />
-                <Text style={styles.detailCount}>{m.paymentCount} ödeme</Text>
-                <Text style={styles.detailRevenue}>₺{m.revenue.toLocaleString('tr-TR')}</Text>
-              </View>
-            ))}
-          </View>
         </ScrollView>
       )}
 
@@ -451,6 +481,33 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 14, fontWeight: '800', color: colors.dark },
   emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },
+  upgradeBox: {
+    padding: 24,
+    marginTop: 12,
+    backgroundColor: colors.primarySoft,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+  },
+  upgradeIcon: { fontSize: 36 },
+  upgradeTitle: { fontSize: 15, fontWeight: '800', color: colors.dark, marginTop: 8 },
+  upgradeSub: {
+    fontSize: 12,
+    color: colors.dark,
+    textAlign: 'center',
+    marginTop: 6,
+    lineHeight: 18,
+    maxWidth: 260,
+  },
+  upgradeCta: {
+    marginTop: 14,
+    backgroundColor: colors.dark,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+  },
+  upgradeCtaText: { color: '#fff', fontWeight: '800', fontSize: 13 },
 
   pendingCard: {
     backgroundColor: colors.primarySoft,

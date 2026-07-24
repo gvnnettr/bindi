@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Pressable, Modal, SafeAreaView } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
 import { colors } from '../theme/colors';
 
@@ -24,6 +24,7 @@ interface Props {
 export function RouteMap({ home, school, distanceKm, etaMin, height = 160 }: Props) {
   const [route, setRoute] = useState<Point[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fullscreen, setFullscreen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,7 +68,8 @@ export function RouteMap({ home, school, distanceKm, etaMin, height = 160 }: Pro
   }, [home, school]);
 
   return (
-    <View style={[styles.wrap, { height }]}>
+    <>
+    <Pressable onPress={() => setFullscreen(true)} style={[styles.wrap, { height }]}>
       <MapView
         provider={PROVIDER_DEFAULT}
         style={StyleSheet.absoluteFill}
@@ -107,7 +109,44 @@ export function RouteMap({ home, school, distanceKm, etaMin, height = 160 }: Pro
           <Text style={styles.badgeText}>{distanceKm} km · {etaMin} dk</Text>
         </View>
       )}
-    </View>
+      <View style={styles.expandBadge}>
+        <Text style={styles.expandBadgeText}>🔍 Büyüt</Text>
+      </View>
+    </Pressable>
+
+    <Modal visible={fullscreen} animationType="slide" onRequestClose={() => setFullscreen(false)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+        <View style={styles.fullHeader}>
+          <Pressable onPress={() => setFullscreen(false)} hitSlop={12} style={styles.closeBtn}>
+            <Text style={styles.closeText}>✕</Text>
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.fullTitle}>Yol Haritası</Text>
+            {distanceKm != null && etaMin != null && (
+              <Text style={styles.fullSub}>{distanceKm} km · {etaMin} dk</Text>
+            )}
+          </View>
+        </View>
+        <MapView
+          provider={PROVIDER_DEFAULT}
+          style={{ flex: 1 }}
+          initialRegion={region}
+          showsCompass
+          showsMyLocationButton={false}
+        >
+          {route && route.length > 1 && (
+            <Polyline coordinates={route} strokeColor={colors.primaryDark} strokeWidth={5} />
+          )}
+          <Marker coordinate={home} title="Öğrenci evi">
+            <View style={styles.markerHome}><Text style={styles.markerText}>🏠</Text></View>
+          </Marker>
+          <Marker coordinate={school} title={school.name ?? 'Okul'}>
+            <View style={styles.markerSchool}><Text style={styles.markerText}>🏫</Text></View>
+          </Marker>
+        </MapView>
+      </SafeAreaView>
+    </Modal>
+    </>
   );
 }
 
@@ -155,4 +194,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  expandBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(31,41,55,0.85)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  expandBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  fullHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    backgroundColor: '#000',
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  fullTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  fullSub: { color: 'rgba(255,255,255,0.7)', fontSize: 12, marginTop: 2 },
 });

@@ -15,10 +15,13 @@ import { colors } from '../../../../src/theme/colors';
 
 interface Driver {
   id: string;
-  fullName: string;
+  name: string;
   phone: string;
-  licenseNo: string | null;
+  tcNo: string | null;
+  licenseClass: string | null;
   active: boolean;
+  note: string | null;
+  createdAt?: string;
 }
 
 interface DocRow {
@@ -84,10 +87,10 @@ export default function SoforDetayScreen() {
 
           <View style={styles.hero}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{driver.fullName.charAt(0).toUpperCase()}</Text>
+              <Text style={styles.avatarText}>{driver.name.charAt(0).toUpperCase()}</Text>
             </View>
-            <Text style={styles.name}>{driver.fullName}</Text>
-            {driver.licenseNo && <Text style={styles.meta}>Ehliyet: {driver.licenseNo}</Text>}
+            <Text style={styles.name}>{driver.name}</Text>
+            {driver.licenseClass && <Text style={styles.meta}>Ehliyet: {driver.licenseClass}</Text>}
             <View style={styles.contactRow}>
               <Pressable onPress={() => Linking.openURL(`tel:${driver.phone}`)} style={styles.contactBtn}>
                 <Text style={styles.contactBtnText}>📞 {driver.phone}</Text>

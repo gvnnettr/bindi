@@ -345,7 +345,8 @@ export class EnrollmentsService {
   }
 
   async listAllPaymentsForProvider(providerId: string) {
-    await this.assertTakipActive(providerId);
+    // NOT: Takip Paketi kilidi kaldırıldı — dekont onay temel iş akışı,
+    // her servisçiye açık olmalı. Sadece kazanç raporu (grafik/detay) kilitli kalır.
     const enrollments = await this.enrollments.find({
       where: { providerId },
       relations: ['student', 'parent'],

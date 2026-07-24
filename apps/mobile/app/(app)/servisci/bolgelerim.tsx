@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -204,16 +204,26 @@ function AddLocationModal({
   onDone: () => void;
 }) {
   const { token } = useAuth();
+  const [mode, setMode] = useState<'map' | 'district'>('map');
   const [label, setLabel] = useState('');
-  const [radiusKm, setRadiusKm] = useState(10);
+  const [radiusKm, setRadiusKm] = useState(2);
   const [center, setCenter] = useState<{ latitude: number; longitude: number }>({
     latitude: DEFAULT_REGION.latitude,
     longitude: DEFAULT_REGION.longitude,
   });
   const [mapRegion, setMapRegion] = useState<Region>(DEFAULT_REGION);
+  const [city, setCity] = useState('');
+  const [district, setDistrict] = useState('');
+  const [neighborhood, setNeighborhood] = useState('');
+  const [enabledCities, setEnabledCities] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    api.get<string[]>('/cities/public').then(setEnabledCities).catch(() => {});
+  }, [visible]);
 
   async function useMyLocation() {
     setError(null);
@@ -240,18 +250,31 @@ function AddLocationModal({
   }
 
   async function submit() {
-    if (!label.trim()) { setError('Konuma bir isim ver (ör: "İş yeri", "Ev")'); return; }
     setLoading(true);
     setError(null);
     try {
-      await api.post('/me/regions/location', {
-        label: label.trim(),
-        latitude: center.latitude,
-        longitude: center.longitude,
-        radiusKm,
-      }, token);
+      if (mode === 'map') {
+        if (!label.trim()) { setError('Konuma bir isim ver (ör: "İş yeri", "Ev")'); setLoading(false); return; }
+        await api.post('/me/regions/location', {
+          label: label.trim(),
+          latitude: center.latitude,
+          longitude: center.longitude,
+          radiusKm,
+        }, token);
+      } else {
+        // il/ilçe/mahalle
+        if (!city.trim() || !district.trim()) { setError('İl ve ilçe zorunlu'); setLoading(false); return; }
+        await api.post('/me/regions', {
+          city: city.trim(),
+          district: district.trim(),
+          neighborhood: neighborhood.trim() || undefined,
+        }, token);
+      }
       setLabel('');
-      setRadiusKm(10);
+      setCity('');
+      setDistrict('');
+      setNeighborhood('');
+      setRadiusKm(2);
       onDone();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
@@ -281,6 +304,50 @@ function AddLocationModal({
             <ScrollView style={{ maxHeight: 500 }}>
               <ErrorBanner message={error} />
 
+              {/* MODE TAB */}
+              <View style={mstyles.modeTabs}>
+                <Pressable
+                  onPress={() => setMode('map')}
+                  style={[mstyles.modeTab, mode === 'map' && mstyles.modeTabActive]}
+                >
+                  <Text style={[mstyles.modeTabText, mode === 'map' && mstyles.modeTabTextActive]}>
+                    📍 Konum + Yarıçap
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => setMode('district')}
+                  style={[mstyles.modeTab, mode === 'district' && mstyles.modeTabActive]}
+                >
+                  <Text style={[mstyles.modeTabText, mode === 'district' && mstyles.modeTabTextActive]}>
+                    🏙 İl / İlçe / Mahalle
+                  </Text>
+                </Pressable>
+              </View>
+
+              {mode === 'district' && (
+                <>
+                  <Text style={mstyles.mapHint}>
+                    İl ve ilçe seç. Bu bölgedeki her yeni talep sana bildirilir.
+                  </Text>
+                  <Text style={mstyles.label}>İl</Text>
+                  <View style={mstyles.chipRow}>
+                    {enabledCities.map((c) => (
+                      <Pressable
+                        key={c}
+                        onPress={() => setCity(c)}
+                        style={[mstyles.chip, city === c && mstyles.chipActive]}
+                      >
+                        <Text style={[mstyles.chipText, city === c && mstyles.chipTextActive]}>{c}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Input label="İlçe *" value={district} onChangeText={setDistrict} placeholder="Örn: Altınordu" />
+                  <Input label="Mahalle (opsiyonel)" value={neighborhood} onChangeText={setNeighborhood} placeholder="Boş bırakırsan ilçenin tamamı" />
+                </>
+              )}
+
+              {mode === 'map' && (
+              <>
               <View style={mstyles.mapWrap}>
                 <MapView
                   provider={PROVIDER_DEFAULT}
@@ -318,7 +385,7 @@ function AddLocationModal({
                 <Text style={mstyles.radiusValue}>{radiusKm} km</Text>
               </View>
               <View style={mstyles.chipRow}>
-                {[5, 10, 15, 20, 30].map((r) => (
+                {[1, 2, 3, 5, 10, 15].map((r) => (
                   <Pressable
                     key={r}
                     onPress={() => {
@@ -344,6 +411,8 @@ function AddLocationModal({
                 onChangeText={setLabel}
                 placeholder='Örn: "Ana bölgem", "Kadıköy şubesi"'
               />
+              </>
+              )}
             </ScrollView>
 
             <Pressable
@@ -357,7 +426,9 @@ function AddLocationModal({
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={mstyles.primaryBtnText}>Konumu Ekle</Text>
+                <Text style={mstyles.primaryBtnText}>
+                  {mode === 'map' ? 'Konumu Ekle' : 'Bölgeyi Ekle'}
+                </Text>
               )}
             </Pressable>
           </View>
@@ -572,4 +643,37 @@ const mstyles = StyleSheet.create({
     marginTop: 16,
   },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  modeTabs: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 14,
+    padding: 4,
+    backgroundColor: colors.bg,
+    borderRadius: 12,
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modeTabActive: {
+    backgroundColor: colors.card,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  modeTabText: { fontSize: 12, fontWeight: '700', color: colors.muted },
+  modeTabTextActive: { color: colors.dark, fontWeight: '800' },
+  label: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 12,
+    marginBottom: 8,
+  },
 });

@@ -578,7 +578,13 @@ export class ProvidersService {
         rating: row.rating,
         comment: row.comment,
         createdAt: row.created_at,
-        parentName: row.parent_name,
+        // KVKK: servisçi de veli tam adını görmemeli — baş harf maskesi
+        parentName: String(row.parent_name || 'A')
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((w: string) => w[0].toUpperCase() + '.')
+          .join(''),
       })),
     };
   }

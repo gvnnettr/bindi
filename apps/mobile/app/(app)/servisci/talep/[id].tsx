@@ -298,6 +298,7 @@ export default function TalepDetayScreen() {
         visible={modal}
         onClose={() => setModal(false)}
         vehicles={vehicles}
+        stats={stats}
         onSubmit={async (payload) => {
           if (!token || !id) return;
           try {
@@ -333,11 +334,13 @@ function OfferModal({
   visible,
   onClose,
   vehicles,
+  stats,
   onSubmit,
 }: {
   visible: boolean;
   onClose: () => void;
   vehicles: Vehicle[];
+  stats: OfferStats | null;
   onSubmit: (payload: { monthlyPrice: string; vehicleId?: string; note?: string }) => Promise<void>;
 }) {
   const [price, setPrice] = useState('');
@@ -387,6 +390,40 @@ function OfferModal({
 
             <ScrollView contentContainerStyle={modalStyles.body}>
               <ErrorBanner message={error} />
+
+              {stats && stats.count > 0 && (
+                <View style={statsStyles.statsCard}>
+                  <Text style={statsStyles.statsHeader}>
+                    RAKİP TEKLİFLER · {stats.count} SERVİSÇİ
+                  </Text>
+                  <View style={statsStyles.statsRow}>
+                    {stats.min != null && (
+                      <View style={statsStyles.statsCell}>
+                        <Text style={statsStyles.statsCellLabel}>MİN</Text>
+                        <Text style={statsStyles.statsCellValue}>{stats.min.toLocaleString('tr-TR')} ₺</Text>
+                      </View>
+                    )}
+                    {stats.avg != null && (
+                      <View style={statsStyles.statsCell}>
+                        <Text style={statsStyles.statsCellLabel}>ORT.</Text>
+                        <Text style={[statsStyles.statsCellValue, { color: '#F59E0B' }]}>
+                          {stats.avg.toLocaleString('tr-TR')} ₺
+                        </Text>
+                      </View>
+                    )}
+                    {stats.max != null && (
+                      <View style={statsStyles.statsCell}>
+                        <Text style={statsStyles.statsCellLabel}>MAX</Text>
+                        <Text style={statsStyles.statsCellValue}>{stats.max.toLocaleString('tr-TR')} ₺</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={statsStyles.statsHint}>
+                    Bu talebe önceden verilen tekliflerin özeti — kararınıza yardımcı
+                  </Text>
+                </View>
+              )}
+
               <Input
                 label="Aylık Ücret (₺)"
                 value={price}
@@ -694,5 +731,53 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.muted,
     lineHeight: 16,
+  },
+});
+
+// Teklif ver modalı içindeki rakip fiyat kartı stilleri
+const statsStyles = StyleSheet.create({
+  statsCard: {
+    backgroundColor: colors.primarySoft,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  statsHeader: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: colors.dark,
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  statsRow: {
+    flexDirection: 'row' as const,
+    gap: 6,
+    marginBottom: 8,
+  },
+  statsCell: {
+    flex: 1,
+    padding: 8,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    alignItems: 'center' as const,
+  },
+  statsCellLabel: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    color: colors.muted,
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  statsCellValue: {
+    fontSize: 14,
+    fontWeight: '800' as const,
+    color: colors.dark,
+  },
+  statsHint: {
+    fontSize: 11,
+    color: colors.muted,
+    fontStyle: 'italic' as const,
   },
 });
