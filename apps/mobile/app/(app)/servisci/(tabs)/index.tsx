@@ -1,81 +1,73 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   Pressable,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
-import { NotificationBell } from '../../../../src/components/NotificationBell';
 import { api, ApiError } from '../../../../src/api/client';
 import { useAuth } from '../../../../src/state/auth';
+import { NotificationBell } from '../../../../src/components/NotificationBell';
 import { colors } from '../../../../src/theme/colors';
 
-interface RequestRow {
+interface ProviderMe {
   id: string;
-  city: string;
-  district: string;
-  neighborhood: string | null;
-  pickupType: string | null;
-  notes: string | null;
-  createdAt: string;
-  distanceKm: number | null;
-  etaMin: number | null;
-  hasLocation: boolean;
-  students: Array<{ name: string; class: string | null; school: { id: string; name: string } | null }>;
-  myOffer: { id: string; monthlyPrice: string; status: string } | null;
+  companyName: string;
+  ownerName: string;
+  status: string;
 }
 
-type Filter = 'all' | 'new' | 'offered';
-
-function timeAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const min = Math.floor((now - then) / 60000);
-  if (min < 1) return 'Az önce';
-  if (min < 60) return `${min} dk önce`;
-  const hour = Math.floor(min / 60);
-  if (hour < 24) return `${hour} saat önce`;
-  const day = Math.floor(hour / 24);
-  return `${day} gün önce`;
+interface Dashboard {
+  pendingOffers: number;
+  wonOffers: number;
+  activeMonthlyRevenue: number;
+  avgRating: number;
+  totalReviews: number;
+  newRequestsToday: number;
 }
 
-export default function TaleplerScreen() {
+interface PaymentItem {
+  id: string;
+  status: string;
+}
+
+export default function ServisciAnaSayfa() {
   const { token } = useAuth();
-  const [rows, setRows] = useState<RequestRow[]>([]);
+  const [me, setMe] = useState<ProviderMe | null>(null);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [submittedCount, setSubmittedCount] = useState(0);
+  const [pendingPaymentsCount, setPendingPaymentsCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<Filter>('all');
 
   const load = useCallback(async () => {
     if (!token) return;
     try {
-      const r = await api.get<RequestRow[]>('/me/requests', token);
-      setRows(r);
+      const [m, d] = await Promise.all([
+        api.get<ProviderMe>('/me/provider', token),
+        api.get<Dashboard>('/me/dashboard', token).catch(() => null),
+      ]);
+      setMe(m);
+      setDashboard(d);
+      // Ödeme durumu (Takip Paketi olmayan servisçilerde de artık açık)
+      try {
+        const payments = await api.get<PaymentItem[]>('/me/payments', token);
+        setSubmittedCount(payments.filter((p) => p.status === 'submitted').length);
+        setPendingPaymentsCount(payments.filter((p) => p.status === 'pending' || p.status === 'late').length);
+      } catch {}
       setError(null);
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : (e as Error).message;
-      setError(msg);
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
     }
   }, [token]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
-
-  const filtered = useMemo(() => {
-    if (filter === 'new') return rows.filter((r) => !r.myOffer);
-    if (filter === 'offered') return rows.filter((r) => !!r.myOffer);
-    return rows;
-  }, [rows, filter]);
-
-  const counts = useMemo(() => ({
-    all: rows.length,
-    new: rows.filter((r) => !r.myOffer).length,
-    offered: rows.filter((r) => !!r.myOffer).length,
-  }), [rows]);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -84,223 +76,256 @@ export default function TaleplerScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Talepler</Text>
-          <Text style={styles.sub}>Bölgende yeni veli talepleri</Text>
-        </View>
-        <NotificationBell />
-      </View>
-
-      <View style={styles.filterRow}>
-        <FilterChip label="Tümü" active={filter === 'all'} count={counts.all} onPress={() => setFilter('all')} />
-        <FilterChip label="Yeni" active={filter === 'new'} count={counts.new} onPress={() => setFilter('new')} />
-        <FilterChip label="Teklif Verdim" active={filter === 'offered'} count={counts.offered} onPress={() => setFilter('offered')} />
-      </View>
-
-      {error && (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-
-      <FlatList
-        data={filtered}
-        keyExtractor={(r) => r.id}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.dark} />}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyTitle}>
-              {filter === 'new' ? 'Yeni talep yok' : filter === 'offered' ? 'Teklif vermedin' : 'Talep yok'}
-            </Text>
-            <Text style={styles.emptySub}>
-              Yeni talepler geldiğinde bildirim alacaksın. Bölgeni genişletmek istersen Menü &gt; Ayarlar.
-            </Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#93C5FD', '#3B82F6', '#1E40AF']}
+        locations={[0, 0.5, 1]}
+        start={{ x: 0.3, y: 0.25 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.hero}
+      >
+        <SafeAreaView edges={['top']} style={styles.heroInner}>
+          <View style={styles.heroTopRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroGreet}>Merhaba,</Text>
+              <Text style={styles.heroName} numberOfLines={1}>
+                {me?.companyName ?? '—'}
+              </Text>
+            </View>
+            <NotificationBell color="#fff" />
           </View>
-        }
-        renderItem={({ item }) => (
+
+          {/* KPI row */}
+          <View style={styles.kpiRow}>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiNum}>{dashboard?.newRequestsToday ?? '—'}</Text>
+              <Text style={styles.kpiLabel}>Bugün Talep</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiNum}>{dashboard?.pendingOffers ?? '—'}</Text>
+              <Text style={styles.kpiLabel}>Bekleyen Teklif</Text>
+            </View>
+            <View style={styles.kpiCard}>
+              <Text style={styles.kpiNum}>{dashboard?.wonOffers ?? '—'}</Text>
+              <Text style={styles.kpiLabel}>Kazandığım</Text>
+            </View>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+
+      <ScrollView
+        contentContainerStyle={styles.body}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.dark} />}
+      >
+        {error && <Text style={styles.errorText}>{error}</Text>}
+
+        {me?.status === 'suspended' && (
+          <View style={styles.warnBox}>
+            <Text style={styles.warnIcon}>⚠️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.warnTitle}>Hesabınız Askıya Alındı</Text>
+              <Text style={styles.warnBody}>
+                Yeni talep gelmiyor, teklif veremezsiniz. Bilgi için destek@bindi.com.tr
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {submittedCount > 0 && (
           <Pressable
-            onPress={() => router.push(`/(app)/servisci/talep/${item.id}`)}
-            style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push('/(app)/servisci/kazanc-raporu')}
+            style={({ pressed }) => [styles.alertCard, pressed && { opacity: 0.85 }]}
           >
-            <View style={styles.cardTop}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardSchool} numberOfLines={1}>
-                  {item.students[0]?.school?.name ?? 'Okul belirtilmemiş'}
-                </Text>
-                <Text style={styles.cardLoc}>
-                  {item.city} · {item.district}
-                  {item.neighborhood ? ` · ${item.neighborhood}` : ''}
-                </Text>
-              </View>
-              {item.myOffer && (
-                <View style={[styles.badge, item.myOffer.status === 'selected' ? styles.badgeSuccess : styles.badgeWarning]}>
-                  <Text style={[styles.badgeText, item.myOffer.status === 'selected' ? styles.badgeTextSuccess : styles.badgeTextWarning]}>
-                    {item.myOffer.status === 'selected' ? 'Kazandın' : 'Teklif verildi'}
-                  </Text>
-                </View>
-              )}
+            <Text style={styles.alertIcon}>💳</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>{submittedCount} bekleyen dekont</Text>
+              <Text style={styles.alertSub}>Velilerin gönderdiği dekontları onayla</Text>
             </View>
-
-            <View style={styles.cardMeta}>
-              <View style={styles.metaChip}>
-                <Text style={styles.metaText}>
-                  {item.students.length} öğrenci
-                </Text>
-              </View>
-              {item.pickupType && (
-                <View style={styles.metaChip}>
-                  <Text style={styles.metaText}>{pickupLabel(item.pickupType)}</Text>
-                </View>
-              )}
-              {item.distanceKm != null && item.etaMin != null && (
-                <View style={[styles.metaChip, styles.metaChipHighlight]}>
-                  <Text style={[styles.metaText, styles.metaTextHighlight]}>
-                    📍 {item.distanceKm} km · ~{item.etaMin} dk
-                  </Text>
-                </View>
-              )}
-              <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
-            </View>
-
-            {item.myOffer && (
-              <View style={styles.priceBar}>
-                <Text style={styles.priceLabel}>Verdiğin teklif</Text>
-                <Text style={styles.priceValue}>₺{Number(item.myOffer.monthlyPrice).toLocaleString('tr-TR')}/ay</Text>
-              </View>
-            )}
+            <Text style={styles.alertArrow}>›</Text>
           </Pressable>
         )}
-      />
-    </SafeAreaView>
+
+        <Text style={styles.sectionTitle}>İşlemler</Text>
+
+        <View style={styles.grid}>
+          <ActionCard
+            emoji="📋"
+            title="Talepler"
+            desc={`${dashboard?.newRequestsToday ?? 0} bugün gelen`}
+            onPress={() => router.push('/(app)/servisci/talepler')}
+          />
+          <ActionCard
+            emoji="📤"
+            title="Tekliflerim"
+            desc={`${dashboard?.pendingOffers ?? 0} bekleyen`}
+            onPress={() => router.push('/(app)/servisci/tekliflerim')}
+          />
+          <ActionCard
+            emoji="💰"
+            title="Ödemeler"
+            desc={`${pendingPaymentsCount} bekliyor`}
+            onPress={() => router.push('/(app)/servisci/kazanc-raporu')}
+          />
+          <ActionCard
+            emoji="⭐"
+            title="Puanlarım"
+            desc={dashboard?.totalReviews ? `${dashboard.avgRating.toFixed(1)} · ${dashboard.totalReviews} yorum` : 'Henüz yorum yok'}
+            onPress={() => router.push('/(app)/servisci/puanlarim')}
+          />
+          <ActionCard
+            emoji="🚐"
+            title="Araçlarım"
+            desc="Araç yönetimi"
+            onPress={() => router.push('/(app)/servisci/araclarim')}
+          />
+          <ActionCard
+            emoji="👤"
+            title="Şoförlerim"
+            desc="Şoför yönetimi"
+            onPress={() => router.push('/(app)/servisci/soforlerim')}
+          />
+          <ActionCard
+            emoji="📍"
+            title="Konum / Bölge"
+            desc="Hizmet çemberim"
+            onPress={() => router.push('/(app)/servisci/bolgelerim')}
+          />
+          <ActionCard
+            emoji="📄"
+            title="Belgelerim"
+            desc="K1, sigorta, ehliyet"
+            onPress={() => router.push('/(app)/servisci/belgelerim')}
+          />
+        </View>
+
+        <Text style={styles.sectionTitle}>Öğrencilerim & Rota</Text>
+        <View style={styles.grid}>
+          <ActionCard
+            emoji="👨‍🎓"
+            title="Öğrencilerim"
+            desc="Aktif servis çocukları"
+            onPress={() => router.push('/(app)/servisci/ogrencilerim')}
+          />
+          <ActionCard
+            emoji="🗺️"
+            title="Rota / Servis"
+            desc="Bugünkü rota"
+            onPress={() => router.push('/(app)/servisci/servis')}
+          />
+        </View>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
   );
 }
 
-function pickupLabel(t: string): string {
-  const map: Record<string, string> = {
-    both: 'Gidiş+Dönüş',
-    morning: 'Sabah',
-    evening: 'Akşam',
-    lunch: 'Öğle',
-  };
-  return map[t] ?? t;
-}
-
-function FilterChip({ label, active, count, onPress }: { label: string; active: boolean; count: number; onPress: () => void }) {
+function ActionCard({
+  emoji,
+  title,
+  desc,
+  onPress,
+}: {
+  emoji: string;
+  title: string;
+  desc: string;
+  onPress: () => void;
+}) {
   return (
-    <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>
-        {label}
-        {count > 0 && <Text style={styles.chipCount}> · {count}</Text>}
-      </Text>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.actionCard, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+    >
+      <Text style={styles.actionEmoji}>{emoji}</Text>
+      <Text style={styles.actionTitle}>{title}</Text>
+      <Text style={styles.actionDesc}>{desc}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
-  header: {
+  hero: { paddingBottom: 20 },
+  heroInner: { paddingHorizontal: 20, paddingTop: 8 },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 12,
+    marginBottom: 20,
   },
-  title: { fontSize: 24, fontWeight: '800', color: colors.dark, letterSpacing: -0.5 },
-  sub: { fontSize: 15, color: colors.muted, marginTop: 2 },
-  filterRow: {
+  heroGreet: { fontSize: 14, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
+  heroName: { fontSize: 22, fontWeight: '800', color: '#fff', marginTop: 2 },
+  kpiRow: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
     gap: 8,
   },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipActive: {
-    backgroundColor: colors.dark,
-    borderColor: colors.dark,
-  },
-  chipText: { fontSize: 15, fontWeight: '700', color: colors.dark },
-  chipTextActive: { color: '#fff' },
-  chipCount: { fontWeight: '500' },
-  errorBox: {
-    marginHorizontal: 20,
-    marginBottom: 8,
+  kpiCard: {
+    flex: 1,
     padding: 12,
-    backgroundColor: '#FEF2F2',
-    borderColor: '#FECACA',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 10,
+    borderColor: 'rgba(255,255,255,0.25)',
   },
-  errorText: { color: '#991B1B', fontSize: 15, fontWeight: '600' },
-  list: { padding: 20, paddingTop: 4, gap: 10, flexGrow: 1 },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardTop: {
+  kpiNum: { fontSize: 24, fontWeight: '800', color: '#fff' },
+  kpiLabel: { fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: '600', marginTop: 2, textAlign: 'center' },
+
+  body: { padding: 16, paddingBottom: 40 },
+  errorText: { color: colors.danger, fontSize: 12, textAlign: 'center', padding: 12 },
+
+  warnBox: {
     flexDirection: 'row',
+    gap: 12,
+    padding: 14,
+    backgroundColor: '#FEE2E2',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#F87171',
+    marginBottom: 12,
     alignItems: 'flex-start',
+  },
+  warnIcon: { fontSize: 24 },
+  warnTitle: { fontSize: 14, fontWeight: '800', color: colors.danger },
+  warnBody: { fontSize: 12, color: '#7F1D1D', marginTop: 4, lineHeight: 18 },
+
+  alertCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+    backgroundColor: colors.primary,
+    borderRadius: 14,
+    marginBottom: 12,
+  },
+  alertIcon: { fontSize: 28 },
+  alertTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
+  alertSub: { fontSize: 12, color: colors.dark, marginTop: 2, opacity: 0.8 },
+  alertArrow: { fontSize: 24, color: colors.dark, fontWeight: '700' },
+
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  cardSchool: { fontSize: 15, fontWeight: '800', color: colors.dark },
-  cardLoc: { fontSize: 15, color: colors.muted, marginTop: 2 },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  badgeSuccess: { backgroundColor: colors.successSoft, borderColor: '#A7F3D0' },
-  badgeWarning: { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
-  badgeText: { fontSize: 10, fontWeight: '800' },
-  badgeTextSuccess: { color: '#065F46' },
-  badgeTextWarning: { color: '#78350F' },
-  cardMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 10,
-  },
-  metaChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    backgroundColor: colors.bg,
-    borderRadius: 8,
+  actionCard: {
+    width: '48%',
+    padding: 16,
+    backgroundColor: colors.card,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
+    minHeight: 100,
   },
-  metaText: { fontSize: 10, fontWeight: '700', color: colors.dark },
-  metaChipHighlight: { backgroundColor: colors.blueSoft, borderColor: '#93C5FD' },
-  metaTextHighlight: { color: '#1E40AF' },
-  time: { fontSize: 10, color: colors.muted, marginLeft: 'auto', fontWeight: '600' },
-  priceBar: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: colors.primarySoft,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  priceLabel: { fontSize: 15, color: '#78350F', fontWeight: '700' },
-  priceValue: { fontSize: 15, color: '#78350F', fontWeight: '800' },
-  empty: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
-  emptySub: { fontSize: 15, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },
+  actionEmoji: { fontSize: 26, marginBottom: 8 },
+  actionTitle: { fontSize: 14, fontWeight: '800', color: colors.dark },
+  actionDesc: { fontSize: 11, color: colors.muted, marginTop: 4 },
 });
