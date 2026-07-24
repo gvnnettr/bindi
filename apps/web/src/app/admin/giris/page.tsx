@@ -46,7 +46,7 @@ export default function AdminLoginPage() {
         <Field label="E-posta">
           <Input
             type="email"
-            placeholder="admin@servis.gvn.net.tr"
+            placeholder="admin@bindi.com.tr"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />

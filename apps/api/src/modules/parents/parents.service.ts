@@ -671,7 +671,7 @@ export class ParentsService {
     try {
       await this.sms.send(
         target.phone,
-        `${inviter?.name ?? 'Bir veli'} sizi çocukları için Servis Platform'a ekledi. Giriş: https://servis.gvn.net.tr/veli/giris`,
+        `${inviter?.name ?? 'Bir veli'} sizi çocukları için Bindi'ye ekledi. Giriş: https://bindi.com.tr/veli/giris`,
       );
     } catch {}
     return { ok: true, invitedParentId: target.id };
