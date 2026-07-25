@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { api } from '../api/client';
 import { useAuth, type Role } from '../state/auth';
 
@@ -18,9 +19,29 @@ export function useFcmToken() {
     let cancelled = false;
 
     (async () => {
+      try {
+        const existing = await Notifications.getPermissionsAsync();
+        let status = existing.status;
+        if (status !== 'granted') {
+          const req = await Notifications.requestPermissionsAsync({
+            ios: {
+              allowAlert: true,
+              allowBadge: true,
+              allowSound: true,
+            },
+          });
+          status = req.status;
+        }
+        if (status !== 'granted') {
+          console.warn('Bildirim izni verilmedi:', status);
+          return;
+        }
+      } catch (e) {
+        console.warn('expo-notifications izin akışı başarısız', e);
+      }
+
       let messaging: typeof import('@react-native-firebase/messaging').default;
       try {
-        // Lazy import — crash olursa senkron başlangıçta değil burada olsun
         messaging = (await import('@react-native-firebase/messaging')).default;
       } catch (e) {
         console.warn('Firebase messaging import failed', e);
@@ -28,13 +49,6 @@ export function useFcmToken() {
       }
 
       try {
-        if (Platform.OS === 'ios') {
-          const s = await messaging().requestPermission();
-          const granted =
-            s === messaging.AuthorizationStatus.AUTHORIZED ||
-            s === messaging.AuthorizationStatus.PROVISIONAL;
-          if (!granted) return;
-        }
         const fcm = await messaging().getToken();
         if (cancelled) return;
         currentFcmToken = fcm;
