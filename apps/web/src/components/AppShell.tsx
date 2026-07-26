@@ -30,9 +30,13 @@ export function AppShell({
   const pathname = usePathname();
   const branding = useBranding();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoBroken, setLogoBroken] = useState(false);
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+  useEffect(() => {
+    setLogoBroken(false);
+  }, [branding.logoFooterUrl]);
   const isRoot = (href: string) =>
     href === '/admin' || href === '/servisci' || href === '/veli';
   const matches = (href: string) =>
@@ -58,13 +62,14 @@ export function AppShell({
         }
       >
         <div className="flex min-h-16 items-center gap-3 px-4 py-3">
-          {branding.logoFooterUrl ? (
+          {branding.logoFooterUrl && !logoBroken ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={branding.logoFooterUrl}
                 alt={branding.siteName || brand}
                 className="h-12 w-auto"
+                onError={() => setLogoBroken(true)}
               />
               <span className="text-[10px] font-medium uppercase tracking-widest text-charcoal-400">
                 {subtitle}
