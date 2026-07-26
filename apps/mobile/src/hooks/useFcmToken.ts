@@ -59,6 +59,7 @@ export function useFcmToken() {
               projectId: 'bindi-9db7a',
               messagingSenderId: '945220721469',
               storageBucket: 'bindi-9db7a.firebasestorage.app',
+              databaseURL: 'https://bindi-9db7a-default-rtdb.firebaseio.com',
             });
             debug('3a) firebase manuel init OK');
           } catch (e) {
