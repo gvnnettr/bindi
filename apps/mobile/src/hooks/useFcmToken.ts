@@ -49,8 +49,19 @@ export function useFcmToken() {
       }
 
       try {
+        if (Platform.OS === 'ios') {
+          if (!messaging().isDeviceRegisteredForRemoteMessages) {
+            await messaging().registerDeviceForRemoteMessages();
+          }
+          // APNs token'in gelmesi icin kisa bir bekleme
+          await new Promise((r) => setTimeout(r, 500));
+        }
         const fcm = await messaging().getToken();
         if (cancelled) return;
+        if (!fcm) {
+          console.warn('FCM token bos dondu');
+          return;
+        }
         currentFcmToken = fcm;
         await api.post(
           pathFor(role, 'register'),

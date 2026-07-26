@@ -115,6 +115,9 @@ export class PushService implements OnModuleInit {
       appVersion?: string;
     },
   ) {
+    this.logger.log(
+      `[registerMobileToken] role=${role} recipientId=${recipientId} platform=${input.platform} tokenPreview=${input.token.slice(0, 20)}...`,
+    );
     let row = await this.tokens.findOne({ where: { token: input.token } });
     if (row) {
       row.role = role;
@@ -133,6 +136,7 @@ export class PushService implements OnModuleInit {
       });
     }
     await this.tokens.save(row);
+    this.logger.log(`[registerMobileToken] OK — DB'ye yazildi id=${row.id}`);
     return { ok: true };
   }
 
