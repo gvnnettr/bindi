@@ -49,8 +49,26 @@ export function useFcmToken() {
 
       let messaging: typeof import('@react-native-firebase/messaging').default;
       try {
+        // Firebase app default'u init et (AppDelegate hook kirilmis olabilir)
+        const firebaseApp = (await import('@react-native-firebase/app')).default;
+        if (firebaseApp.apps.length === 0) {
+          try {
+            await firebaseApp.initializeApp({
+              apiKey: 'AIzaSyAUwuqNgUAXb_OOc0HVNeTN4ZVGP4942N8',
+              appId: '1:945220721469:ios:f4949a0696cdd3bb0d8354',
+              projectId: 'bindi-9db7a',
+              messagingSenderId: '945220721469',
+              storageBucket: 'bindi-9db7a.firebasestorage.app',
+            });
+            debug('3a) firebase manuel init OK');
+          } catch (e) {
+            debug(`3a) firebase init HATA: ${(e as Error).message}`);
+          }
+        } else {
+          debug(`3a) firebase zaten init (${firebaseApp.apps.length} app)`);
+        }
         messaging = (await import('@react-native-firebase/messaging')).default;
-        debug('3) firebase import OK');
+        debug('3b) firebase messaging import OK');
       } catch (e) {
         debug(`HATA import: ${(e as Error).message}`);
         return;
