@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Trip, TripEnrollment, Enrollment, StudentGuardian } from '@servis/db';
+import { Trip, TripEnrollment, Enrollment, StudentGuardian, Offer } from '@servis/db';
 import { TripsService } from './trips.service';
 import { ProviderTripsController, ParentTripsController } from './trips.controller';
 import { ProvidersModule } from '../providers/providers.module';
@@ -10,7 +10,7 @@ import { ParentsModule } from '../parents/parents.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Trip, TripEnrollment, Enrollment, StudentGuardian]),
+    TypeOrmModule.forFeature([Trip, TripEnrollment, Enrollment, StudentGuardian, Offer]),
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (cfg: ConfigService) => ({

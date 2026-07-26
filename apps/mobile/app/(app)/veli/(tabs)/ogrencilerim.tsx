@@ -93,7 +93,7 @@ export default function OgrencilerimScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Öğrencilerim</Text>
+          <Text style={styles.title}>Çocuklarım</Text>
           <Text style={styles.sub}>Servis talebi için tanımlı çocuklar</Text>
         </View>
         <Pressable style={styles.addBtn} onPress={() => setModal(true)} hitSlop={8}>

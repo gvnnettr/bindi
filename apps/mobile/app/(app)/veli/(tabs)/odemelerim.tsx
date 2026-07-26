@@ -9,6 +9,8 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Linking,
+  Image,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -62,6 +64,7 @@ export default function OdemelerimScreen() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [uploadFor, setUploadFor] = useState<Payment | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -201,7 +204,13 @@ export default function OdemelerimScreen() {
               )}
 
               {item.receiptUrl && (
-                <Text style={styles.receiptText}>📄 Dekont yüklendi{item.submittedAt ? ` · ${new Date(item.submittedAt).toLocaleDateString('tr-TR')}` : ''}</Text>
+                <Pressable
+                  onPress={() => setPreviewReceipt(item.receiptUrl!)}
+                  style={({ pressed }) => [styles.receiptRow, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.receiptText}>📄 Dekont yüklendi{item.submittedAt ? ` · ${new Date(item.submittedAt).toLocaleDateString('tr-TR')}` : ''}</Text>
+                  <Text style={styles.receiptLink}>Görüntüle</Text>
+                </Pressable>
               )}
 
               {item.providerNote && (
@@ -229,6 +238,32 @@ export default function OdemelerimScreen() {
           await load();
         }}
       />
+
+      <Modal
+        visible={!!previewReceipt}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPreviewReceipt(null)}
+      >
+        <Pressable style={styles.previewBackdrop} onPress={() => setPreviewReceipt(null)}>
+          <View style={styles.previewClose}>
+            <Text style={styles.previewCloseText}>✕</Text>
+          </View>
+          {previewReceipt && (
+            <Image
+              source={{ uri: previewReceipt }}
+              style={styles.previewImage}
+              resizeMode="contain"
+            />
+          )}
+          <Pressable
+            onPress={() => previewReceipt && Linking.openURL(previewReceipt)}
+            style={styles.previewOpenBtn}
+          >
+            <Text style={styles.previewOpenText}>Tarayıcıda Aç</Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -465,6 +500,46 @@ const styles = StyleSheet.create({
   priceValue: { fontSize: 18, fontWeight: '800', color: colors.dark },
   dueText: { fontSize: 15, color: colors.muted, fontWeight: '600' },
   receiptText: { fontSize: 15, color: colors.success, fontWeight: '700' },
+  receiptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  receiptLink: { fontSize: 13, color: colors.blue, fontWeight: '700' },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImage: { width: '95%', height: '80%' },
+  previewClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewCloseText: { fontSize: 22, fontWeight: '800', color: colors.dark },
+  previewOpenBtn: {
+    position: 'absolute',
+    bottom: 40,
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  previewOpenText: { fontSize: 14, fontWeight: '700', color: colors.dark },
   providerNote: {
     padding: 10, backgroundColor: '#EEF2FF', borderRadius: 8,
     borderWidth: 1, borderColor: '#C7D2FE', marginTop: 4,

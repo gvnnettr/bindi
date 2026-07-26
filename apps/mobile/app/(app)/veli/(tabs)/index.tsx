@@ -186,12 +186,15 @@ export default function VeliAnaScreen() {
                 style={({ pressed }) => [styles.activeCard, pressed && { opacity: 0.8 }]}
               >
                 <View style={styles.activeHeader}>
-                  <View>
+                  <View style={{ flex: 1 }}>
                     <Text style={styles.activeCompany} numberOfLines={1}>
                       {r.selectedOffer!.provider.companyName}
                     </Text>
+                    <Text style={styles.activeSub} numberOfLines={2}>
+                      👤 {r.students.map((s) => s.name).join(', ')}
+                    </Text>
                     <Text style={styles.activeSub}>
-                      {r.students[0]?.school ?? 'Okul'} · {r.students.length} öğrenci
+                      🏫 {r.students[0]?.school ?? 'Okul'}
                     </Text>
                   </View>
                   <View style={styles.activeBadge}>
@@ -227,10 +230,12 @@ export default function VeliAnaScreen() {
                   <Text style={styles.reqIcon}>{r.offerCount}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.reqTitle}>
-                    {r.students[0]?.school ?? 'Okul'}
+                  <Text style={styles.reqTitle} numberOfLines={1}>
+                    {r.students.map((s) => s.name).join(', ')}
                   </Text>
-                  <Text style={styles.reqSub}>{r.offerCount} teklif geldi · İnceleyip seç</Text>
+                  <Text style={styles.reqSub} numberOfLines={1}>
+                    {r.students[0]?.school ?? 'Okul'} · {r.offerCount} teklif geldi
+                  </Text>
                 </View>
                 <Text style={styles.reqChev}>›</Text>
               </Pressable>
@@ -253,10 +258,12 @@ export default function VeliAnaScreen() {
                   </Svg>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.reqTitle}>
-                    {r.students[0]?.school ?? 'Okul'}
+                  <Text style={styles.reqTitle} numberOfLines={1}>
+                    {r.students.map((s) => s.name).join(', ')}
                   </Text>
-                  <Text style={styles.reqSub}>Servisçilere iletildi · Teklif bekleniyor</Text>
+                  <Text style={styles.reqSub} numberOfLines={1}>
+                    {r.students[0]?.school ?? 'Okul'} · Teklif bekleniyor
+                  </Text>
                 </View>
                 <Text style={styles.reqChev}>›</Text>
               </Pressable>

@@ -70,7 +70,7 @@ export default function VeliTabsLayout() {
       <Tabs.Screen
         name="ogrencilerim"
         options={{
-          title: 'Öğrenciler',
+          title: 'Çocuklarım',
           tabBarIcon: ({ color, focused }) => (
             <TabIcon focused={focused}>
               <Svg width={22} height={22} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round">

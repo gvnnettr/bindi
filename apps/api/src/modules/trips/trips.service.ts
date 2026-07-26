@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
-import { Trip, TripEnrollment, Enrollment, StudentGuardian } from '@servis/db';
+import { Trip, TripEnrollment, Enrollment, StudentGuardian, Offer } from '@servis/db';
 import { PushService } from '../push/push.service';
 
 @Injectable()
@@ -11,6 +11,7 @@ export class TripsService {
     @InjectRepository(TripEnrollment) private readonly tripEnrollments: Repository<TripEnrollment>,
     @InjectRepository(Enrollment) private readonly enrollments: Repository<Enrollment>,
     @InjectRepository(StudentGuardian) private readonly guardians: Repository<StudentGuardian>,
+    @InjectRepository(Offer) private readonly offers: Repository<Offer>,
     private readonly ds: DataSource,
     private readonly push: PushService,
   ) {}
@@ -194,6 +195,27 @@ export class TripsService {
       relations: ['vehicle', 'provider'],
     });
 
+    // Ev konumunu (parent adresi) enrollment.offer.request.lat/lng'den al
+    const offerIds = Array.from(new Set(
+      Array.from(enrollmentMap.values()).map((e) => e.offerId).filter((x): x is string => !!x),
+    ));
+    const offerRequestMap = new Map<string, { lat: number | null; lng: number | null; address: string | null }>();
+    if (offerIds.length > 0) {
+      const offers = await this.offers.find({
+        where: { id: In(offerIds) },
+        relations: ['request'],
+      });
+      for (const o of offers) {
+        if (o.request) {
+          offerRequestMap.set(o.id, {
+            lat: o.request.latitude != null ? Number(o.request.latitude) : null,
+            lng: o.request.longitude != null ? Number(o.request.longitude) : null,
+            address: o.request.address ?? null,
+          });
+        }
+      }
+    }
+
     return activeTrips.map((t) => {
       const enrollmentIdsForThisTrip = junctions
         .filter((j) => j.tripId === t.id)
@@ -201,6 +223,9 @@ export class TripsService {
       const myEnrollments = enrollmentIdsForThisTrip
         .map((eid) => enrollmentMap.get(eid))
         .filter((e): e is Enrollment => !!e);
+      // Ev konumu için ilk enrollment'ın offer'ından request lat/lng çek
+      const firstEnr = myEnrollments[0];
+      const homeInfo = firstEnr?.offerId ? offerRequestMap.get(firstEnr.offerId) : null;
       return {
         id: t.id,
         startedAt: t.startedAt,
@@ -208,6 +233,9 @@ export class TripsService {
         currentLat: t.currentLat ? Number(t.currentLat) : null,
         currentLng: t.currentLng ? Number(t.currentLng) : null,
         locationUpdatedAt: t.locationUpdatedAt,
+        homeLat: homeInfo?.lat ?? null,
+        homeLng: homeInfo?.lng ?? null,
+        homeAddress: homeInfo?.address ?? null,
         provider: { id: t.provider.id, companyName: t.provider.companyName, phone: t.provider.phone },
         vehicle: t.vehicle ? {
           brand: t.vehicle.brand,

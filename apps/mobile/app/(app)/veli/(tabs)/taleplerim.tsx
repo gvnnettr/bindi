@@ -141,10 +141,13 @@ export default function TaleplerimScreen() {
             <View style={styles.cardTop}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.school} numberOfLines={1}>
-                  {item.students[0]?.school ?? 'Okul belirtilmemiş'}
+                  👤 {item.students.map((s) => s.name).join(', ')}
                 </Text>
                 <Text style={styles.loc}>
-                  {item.city} · {item.district}
+                  🏫 {item.students[0]?.school ?? 'Okul belirtilmemiş'}
+                </Text>
+                <Text style={styles.loc}>
+                  📍 {item.city} · {item.district}
                   {item.neighborhood ? ` · ${item.neighborhood}` : ''}
                 </Text>
               </View>

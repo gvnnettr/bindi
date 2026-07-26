@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, Linking, Platform, Modal } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,9 +14,35 @@ interface ActiveTrip {
   currentLat: number | null;
   currentLng: number | null;
   locationUpdatedAt: string | null;
+  homeLat: number | null;
+  homeLng: number | null;
+  homeAddress: string | null;
   provider: { id: string; companyName: string; phone: string };
   vehicle: { brand: string; model: string; plate: string } | null;
   students: Array<{ id: string; name: string }>;
+}
+
+// Haversine — 2 nokta arasi km cinsi mesafe
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function etaText(km: number): string {
+  // Sehir ici ort 30 km/saat = 2 dk/km. Basit tahmin.
+  const dk = Math.round(km * 2);
+  if (dk < 1) return '<1 dk';
+  if (dk < 60) return `~${dk} dk`;
+  const h = Math.floor(dk / 60);
+  const m = dk % 60;
+  return `~${h} sa ${m} dk`;
 }
 
 function timeSince(iso: string | null): string {
@@ -108,16 +134,34 @@ export default function ServisTakipScreen() {
 }
 
 function TripCard({ trip }: { trip: ActiveTrip }) {
+  const [fullscreen, setFullscreen] = useState(false);
   const hasLocation = trip.currentLat != null && trip.currentLng != null;
+  const hasHome = trip.homeLat != null && trip.homeLng != null;
+
+  // Mesafe & ETA
+  const distanceInfo = useMemo(() => {
+    if (!hasLocation || !hasHome) return null;
+    const km = haversineKm(trip.currentLat!, trip.currentLng!, trip.homeLat!, trip.homeLng!);
+    return { km, eta: etaText(km) };
+  }, [hasLocation, hasHome, trip.currentLat, trip.currentLng, trip.homeLat, trip.homeLng]);
+
+  // Region: ikisini de gorecek sekilde ortala
   const region = useMemo(() => {
     if (!hasLocation) return null;
+    if (hasHome) {
+      const midLat = (trip.currentLat! + trip.homeLat!) / 2;
+      const midLng = (trip.currentLng! + trip.homeLng!) / 2;
+      const latDelta = Math.max(Math.abs(trip.currentLat! - trip.homeLat!) * 1.6, 0.01);
+      const lngDelta = Math.max(Math.abs(trip.currentLng! - trip.homeLng!) * 1.6, 0.01);
+      return { latitude: midLat, longitude: midLng, latitudeDelta: latDelta, longitudeDelta: lngDelta };
+    }
     return {
       latitude: trip.currentLat!,
       longitude: trip.currentLng!,
       latitudeDelta: 0.01,
       longitudeDelta: 0.01,
     };
-  }, [trip.currentLat, trip.currentLng, hasLocation]);
+  }, [trip.currentLat, trip.currentLng, trip.homeLat, trip.homeLng, hasLocation, hasHome]);
 
   return (
     <View style={styles.tripCard}>
@@ -135,15 +179,30 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
         </View>
       )}
 
+      {distanceInfo && (
+        <View style={styles.etaBox}>
+          <View style={styles.etaItem}>
+            <Text style={styles.etaLabel}>Mesafe</Text>
+            <Text style={styles.etaValue}>{distanceInfo.km.toFixed(1)} km</Text>
+          </View>
+          <View style={styles.etaDivider} />
+          <View style={styles.etaItem}>
+            <Text style={styles.etaLabel}>Tahmini Varış</Text>
+            <Text style={styles.etaValue}>{distanceInfo.eta}</Text>
+          </View>
+        </View>
+      )}
+
       {hasLocation && region ? (
-        <View style={styles.mapWrap}>
+        <Pressable onPress={() => setFullscreen(true)} style={styles.mapWrap}>
           <MapView
             style={styles.map}
             initialRegion={region}
             region={region}
             showsUserLocation={false}
-            scrollEnabled
-            zoomEnabled
+            scrollEnabled={false}
+            zoomEnabled={false}
+            pointerEvents="none"
           >
             <Marker
               coordinate={{ latitude: trip.currentLat!, longitude: trip.currentLng! }}
@@ -151,11 +210,22 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
               description={trip.students.map((s) => s.name).join(', ')}
               pinColor={colors.primary}
             />
+            {hasHome && (
+              <Marker
+                coordinate={{ latitude: trip.homeLat!, longitude: trip.homeLng! }}
+                title="Ev"
+                description={trip.homeAddress ?? ''}
+                pinColor="#EF4444"
+              />
+            )}
           </MapView>
           <View style={styles.mapOverlay}>
             <Text style={styles.mapTime}>Güncelleme: {timeSince(trip.locationUpdatedAt)}</Text>
           </View>
-        </View>
+          <View style={styles.mapExpandHint}>
+            <Text style={styles.mapExpandText}>🔍 Büyüt</Text>
+          </View>
+        </Pressable>
       ) : (
         <View style={styles.noLocBox}>
           <Text style={styles.noLocText}>Konum henüz alınmadı</Text>
@@ -183,6 +253,48 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
           <Text style={styles.contactBtnWaText}>WhatsApp</Text>
         </Pressable>
       </View>
+
+      <Modal visible={fullscreen} animationType="slide" onRequestClose={() => setFullscreen(false)}>
+        <View style={{ flex: 1, backgroundColor: colors.dark }}>
+          <SafeAreaView edges={['top']} style={styles.fsHeader}>
+            <Pressable onPress={() => setFullscreen(false)} hitSlop={12} style={styles.fsClose}>
+              <Text style={styles.fsCloseText}>✕</Text>
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.fsTitle} numberOfLines={1}>{trip.provider.companyName}</Text>
+              {distanceInfo && (
+                <Text style={styles.fsSub}>{distanceInfo.km.toFixed(1)} km · {distanceInfo.eta}</Text>
+              )}
+            </View>
+          </SafeAreaView>
+          {region && (
+            <MapView
+              style={{ flex: 1 }}
+              initialRegion={region}
+              showsUserLocation={false}
+              scrollEnabled
+              zoomEnabled
+              rotateEnabled
+              pitchEnabled
+            >
+              <Marker
+                coordinate={{ latitude: trip.currentLat!, longitude: trip.currentLng! }}
+                title={trip.vehicle?.plate ?? trip.provider.companyName}
+                description={trip.students.map((s) => s.name).join(', ')}
+                pinColor={colors.primary}
+              />
+              {hasHome && (
+                <Marker
+                  coordinate={{ latitude: trip.homeLat!, longitude: trip.homeLng! }}
+                  title="Ev"
+                  description={trip.homeAddress ?? ''}
+                  pinColor="#EF4444"
+                />
+              )}
+            </MapView>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -240,6 +352,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
   },
   mapTime: { fontSize: 10, color: colors.dark, fontWeight: '700' },
+  mapExpandHint: {
+    position: 'absolute', top: 8, right: 8,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
+  },
+  mapExpandText: { fontSize: 11, color: '#fff', fontWeight: '700' },
+  etaBox: {
+    flexDirection: 'row', alignItems: 'center',
+    padding: 12, backgroundColor: '#FEF3C7', borderRadius: 12,
+    borderWidth: 1, borderColor: colors.primary,
+  },
+  etaItem: { flex: 1, alignItems: 'center' },
+  etaLabel: { fontSize: 10, fontWeight: '700', color: colors.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  etaValue: { fontSize: 18, fontWeight: '800', color: colors.dark, marginTop: 2 },
+  etaDivider: { width: 1, height: 30, backgroundColor: colors.borderStrong },
+  fsHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: colors.dark,
+  },
+  fsClose: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  fsCloseText: { fontSize: 18, color: '#fff', fontWeight: '700' },
+  fsTitle: { fontSize: 15, fontWeight: '800', color: '#fff' },
+  fsSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
   noLocBox: {
     padding: 20, backgroundColor: colors.bg,
     borderRadius: 12, alignItems: 'center', gap: 4,
