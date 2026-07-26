@@ -1,8 +1,15 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { api } from '../api/client';
 import { useAuth, type Role } from '../state/auth';
+
+// DEBUG MODU: her adimda gorunur bilgi
+const DEBUG_PUSH = true;
+function debug(msg: string) {
+  if (DEBUG_PUSH) Alert.alert('Push Debug', msg);
+  console.warn('[push]', msg);
+}
 
 function pathFor(role: Role, action: 'register' | 'unregister'): string {
   const base = role === 'provider' ? '/me/push' : '/parent/push';
@@ -19,49 +26,50 @@ export function useFcmToken() {
     let cancelled = false;
 
     (async () => {
+      debug(`1) baslatildi role=${role}`);
       try {
         const existing = await Notifications.getPermissionsAsync();
         let status = existing.status;
+        debug(`2) izin=${status}`);
         if (status !== 'granted') {
           const req = await Notifications.requestPermissionsAsync({
-            ios: {
-              allowAlert: true,
-              allowBadge: true,
-              allowSound: true,
-            },
+            ios: { allowAlert: true, allowBadge: true, allowSound: true },
           });
           status = req.status;
+          debug(`2b) izin sonrasi=${status}`);
         }
         if (status !== 'granted') {
-          console.warn('Bildirim izni verilmedi:', status);
+          debug(`DUR: izin verilmedi (${status})`);
           return;
         }
       } catch (e) {
-        console.warn('expo-notifications izin akışı başarısız', e);
+        debug(`HATA izin: ${(e as Error).message}`);
+        return;
       }
 
       let messaging: typeof import('@react-native-firebase/messaging').default;
       try {
         messaging = (await import('@react-native-firebase/messaging')).default;
+        debug('3) firebase import OK');
       } catch (e) {
-        console.warn('Firebase messaging import failed', e);
+        debug(`HATA import: ${(e as Error).message}`);
         return;
       }
 
       try {
         if (Platform.OS === 'ios') {
-          if (!messaging().isDeviceRegisteredForRemoteMessages) {
-            await messaging().registerDeviceForRemoteMessages();
-          }
-          // APNs token'in gelmesi icin kisa bir bekleme
-          await new Promise((r) => setTimeout(r, 500));
+          debug(`4) APNs register basliyor (once=${messaging().isDeviceRegisteredForRemoteMessages})`);
+          await messaging().registerDeviceForRemoteMessages();
+          await new Promise((r) => setTimeout(r, 1500));
+          debug('4b) APNs register bitti, 1500ms beklendi');
         }
         const fcm = await messaging().getToken();
         if (cancelled) return;
         if (!fcm) {
-          console.warn('FCM token bos dondu');
+          debug('DUR: getToken null dondu');
           return;
         }
+        debug(`5) FCM token alindi: ${fcm.substring(0, 20)}...`);
         currentFcmToken = fcm;
         await api.post(
           pathFor(role, 'register'),
@@ -71,6 +79,7 @@ export function useFcmToken() {
           },
           authToken,
         );
+        debug('6) Backend POST OK — tamamlandi!');
         unsubTokenRefresh = messaging().onTokenRefresh(async (newToken) => {
           if (!newToken || newToken === currentFcmToken) return;
           currentFcmToken = newToken;
@@ -88,7 +97,7 @@ export function useFcmToken() {
           }
         });
       } catch (e) {
-        console.warn('FCM setup failed', e);
+        debug(`HATA FCM: ${(e as Error).message}`);
       }
     })();
 
