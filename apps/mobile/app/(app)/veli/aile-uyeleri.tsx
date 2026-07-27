@@ -114,7 +114,7 @@ export default function AileUyeleriScreen() {
       {error && <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View>}
 
       <FlatList
-        data={guardians}
+        data={guardians.filter((g) => !g.isPrimary)}
         keyExtractor={(g) => g.id}
         contentContainerStyle={styles.list}
         ListHeaderComponent={

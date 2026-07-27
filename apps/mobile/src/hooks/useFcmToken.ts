@@ -79,8 +79,22 @@ export function useFcmToken() {
         if (Platform.OS === 'ios') {
           debug(`4) APNs register basliyor (once=${messaging().isDeviceRegisteredForRemoteMessages})`);
           await messaging().registerDeviceForRemoteMessages();
-          await new Promise((r) => setTimeout(r, 1500));
-          debug('4b) APNs register bitti, 1500ms beklendi');
+          // APNS token gelene kadar 500ms adimlarla max 15s bekle
+          let apns: string | null = null;
+          for (let i = 0; i < 30; i++) {
+            try {
+              apns = await messaging().getAPNSToken();
+            } catch {
+              apns = null;
+            }
+            if (apns) break;
+            await new Promise((r) => setTimeout(r, 500));
+          }
+          if (!apns) {
+            debug('DUR: APNS token 15sn icinde gelmedi. Apple Developer hesabinda App ID icin "Push Notifications" capability aktif mi kontrol et.');
+            return;
+          }
+          debug(`4b) APNS token alindi: ${apns.substring(0, 16)}...`);
         }
         const fcm = await messaging().getToken();
         if (cancelled) return;
