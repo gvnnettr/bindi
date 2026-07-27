@@ -72,6 +72,10 @@ class InviteGuardianDto {
   @IsIn(GUARDIAN_RELATIONS as any) relation!: string;
   @IsArray() @ArrayMinSize(1) @IsString({ each: true }) studentIds!: string[];
 }
+class UpdateGuardianDto {
+  @IsOptional() @IsString() @Length(1, 120) name?: string;
+  @IsOptional() @IsIn(GUARDIAN_RELATIONS as any) relation?: string;
+}
 
 @UseGuards(ParentJwtGuard)
 @Controller('me/parent')
@@ -178,6 +182,15 @@ export class ParentsMeController {
   @Post('guardians')
   inviteGuardian(@Req() req: ParentRequest, @Body() dto: InviteGuardianDto) {
     return this.svc.inviteGuardian(req.parent.id, dto);
+  }
+
+  @Patch('guardians/:id')
+  updateGuardian(
+    @Req() req: ParentRequest,
+    @Param('id') id: string,
+    @Body() dto: UpdateGuardianDto,
+  ) {
+    return this.svc.updateGuardian(req.parent.id, id, dto);
   }
 
   @Delete('guardians/:id')

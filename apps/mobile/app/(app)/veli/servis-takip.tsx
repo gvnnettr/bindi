@@ -255,9 +255,9 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
       </View>
 
       <Modal visible={fullscreen} animationType="slide" onRequestClose={() => setFullscreen(false)}>
-        <View style={{ flex: 1, backgroundColor: colors.dark }}>
-          <SafeAreaView edges={['top']} style={styles.fsHeader}>
-            <Pressable onPress={() => setFullscreen(false)} hitSlop={12} style={styles.fsClose}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: colors.dark }} edges={['top', 'bottom']}>
+          <View style={styles.fsHeader}>
+            <Pressable onPress={() => setFullscreen(false)} hitSlop={20} style={styles.fsClose}>
               <Text style={styles.fsCloseText}>✕</Text>
             </Pressable>
             <View style={{ flex: 1 }}>
@@ -266,7 +266,7 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
                 <Text style={styles.fsSub}>{distanceInfo.km.toFixed(1)} km · {distanceInfo.eta}</Text>
               )}
             </View>
-          </SafeAreaView>
+          </View>
           {region && (
             <MapView
               style={{ flex: 1 }}
@@ -293,7 +293,7 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
               )}
             </MapView>
           )}
-        </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );

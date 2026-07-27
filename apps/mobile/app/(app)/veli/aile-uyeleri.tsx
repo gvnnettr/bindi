@@ -50,6 +50,15 @@ export default function AileUyeleriScreen() {
   const [students, setStudents] = useState<Student[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
+  const [editGuardian, setEditGuardian] = useState<Guardian | null>(null);
+
+  function openActions(g: Guardian) {
+    Alert.alert(g.parent.name, undefined, [
+      { text: 'Düzenle', onPress: () => setEditGuardian(g) },
+      { text: 'Sil', style: 'destructive', onPress: () => remove(g) },
+      { text: 'Vazgeç', style: 'cancel' },
+    ]);
+  }
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -135,8 +144,8 @@ export default function AileUyeleriScreen() {
                 <Text style={styles.phone}>{item.parent.phone}</Text>
               </View>
               {!item.isPrimary && (
-                <Pressable onPress={() => remove(item)} hitSlop={8}>
-                  <Text style={styles.remove}>✕</Text>
+                <Pressable onPress={() => openActions(item)} hitSlop={8} style={{ padding: 8 }}>
+                  <Text style={styles.remove}>⋯</Text>
                 </Pressable>
               )}
             </View>
@@ -153,7 +162,92 @@ export default function AileUyeleriScreen() {
           await load();
         }}
       />
+
+      <EditGuardianModal
+        guardian={editGuardian}
+        onClose={() => setEditGuardian(null)}
+        onDone={async () => {
+          setEditGuardian(null);
+          await load();
+        }}
+      />
     </SafeAreaView>
+  );
+}
+
+function EditGuardianModal({
+  guardian,
+  onClose,
+  onDone,
+}: {
+  guardian: Guardian | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { token } = useAuth();
+  const [name, setName] = useState('');
+  const [relation, setRelation] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (guardian) {
+        setName(guardian.parent.name);
+        setRelation(guardian.relation);
+      }
+    }, [guardian]),
+  );
+
+  async function submit() {
+    if (!guardian) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await api.patch(
+        `/me/parent/guardians/${guardian.id}`,
+        { name: name.trim(), relation },
+        token,
+      );
+      onDone();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal visible={!!guardian} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={ms.backdrop}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <View style={ms.sheet}>
+            <View style={ms.grabber} />
+            <View style={ms.headerRow}>
+              <Text style={ms.title}>Aile Üyesini Düzenle</Text>
+              <Pressable onPress={onClose} hitSlop={12}><Text style={ms.close}>✕</Text></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={ms.body}>
+              <ErrorBanner message={error} />
+              <Input label="Ad Soyad" value={name} onChangeText={setName} autoCapitalize="words" />
+              <Text style={ms.subLabel}>Yakınlık</Text>
+              <View style={ms.relGrid}>
+                {RELATIONS.map((r) => (
+                  <Pressable
+                    key={r.code}
+                    onPress={() => setRelation(r.code)}
+                    style={[ms.relChip, relation === r.code && ms.relChipActive]}
+                  >
+                    <Text style={[ms.relChipText, relation === r.code && ms.relChipTextActive]}>{r.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Button label={loading ? 'Kaydediliyor...' : 'Kaydet'} onPress={submit} loading={loading} style={{ marginTop: 12 }} />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 

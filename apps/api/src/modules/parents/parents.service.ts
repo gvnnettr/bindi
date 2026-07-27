@@ -677,6 +677,33 @@ export class ParentsService {
     return { ok: true, invitedParentId: target.id };
   }
 
+  async updateGuardian(
+    parentId: string,
+    guardianId: string,
+    input: { name?: string; relation?: string },
+  ) {
+    const g = await this.guardians.findOne({
+      where: { id: guardianId },
+      relations: ['student'],
+    });
+    if (!g) throw new NotFoundException();
+    if (g.student.parentId !== parentId)
+      throw new ForbiddenException('Bu velinin yetkisi yok');
+    if (input.relation !== undefined) {
+      g.relation = input.relation;
+      await this.guardians.save(g);
+    }
+    if (input.name !== undefined && input.name.trim().length > 0) {
+      // Guardian'in parent kaydinin adini guncelle
+      const target = await this.parents.findOne({ where: { id: g.parentId } });
+      if (target) {
+        target.name = input.name.trim();
+        await this.parents.save(target);
+      }
+    }
+    return { ok: true };
+  }
+
   async removeGuardian(parentId: string, guardianId: string) {
     const g = await this.guardians.findOne({
       where: { id: guardianId },
