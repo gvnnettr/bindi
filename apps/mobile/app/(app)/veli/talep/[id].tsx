@@ -210,6 +210,7 @@ export default function VeliTalepDetayScreen() {
 
   const schoolName = request?.students?.[0]?.school ?? 'Talep';
   const studentName = request?.students?.[0]?.name;
+  const studentsNames = request?.students?.map((s) => s.name).join(', ') ?? 'Talep';
   const chips = pickupChips(request?.pickupType ?? null);
 
   return (
@@ -218,7 +219,10 @@ export default function VeliTalepDetayScreen() {
         <Pressable onPress={() => router.back()} style={styles.back} hitSlop={12}>
           <Text style={styles.backText}>←</Text>
         </Pressable>
-        <Text style={styles.headerTitle} numberOfLines={1}>{schoolName}</Text>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{studentsNames}</Text>
+          <Text style={{ fontSize: 11, color: colors.muted, marginTop: 1 }} numberOfLines={1}>{schoolName}</Text>
+        </View>
         {request?.status === 'open' && !selected ? (
           <View style={styles.timeChip}>
             <Svg width={10} height={10} viewBox="0 0 24 24" fill="none" stroke="#78350F" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
