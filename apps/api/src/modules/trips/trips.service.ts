@@ -4,6 +4,18 @@ import { DataSource, In, IsNull, Repository } from 'typeorm';
 import { Trip, TripEnrollment, Enrollment, StudentGuardian, Offer } from '@servis/db';
 import { PushService } from '../push/push.service';
 
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 @Injectable()
 export class TripsService {
   constructor(
@@ -93,7 +105,48 @@ export class TripsService {
     trip.currentLng = String(lng);
     trip.locationUpdatedAt = new Date();
     await this.trips.save(trip);
+
+    // PROXIMITY: her enrollment icin eve mesafe < 2km ise ve daha once bildirim gitmemisse push
+    void this.checkProximityAndNotify(tripId, lat, lng);
+
     return { ok: true };
+  }
+
+  private async checkProximityAndNotify(tripId: string, lat: number, lng: number) {
+    try {
+      const junctions = await this.tripEnrollments.find({ where: { tripId } });
+      const pending = junctions.filter((j) => !j.proximityNotifiedAt && j.boardStatus === 'pending');
+      if (pending.length === 0) return;
+      const es = await this.enrollments.find({
+        where: { id: In(pending.map((p) => p.enrollmentId)) },
+        relations: ['student', 'parent', 'offer', 'offer.request'],
+      });
+      for (const e of es) {
+        const homeLat = e.offer?.request?.latitude != null ? Number(e.offer.request.latitude) : null;
+        const homeLng = e.offer?.request?.longitude != null ? Number(e.offer.request.longitude) : null;
+        if (homeLat == null || homeLng == null) continue;
+        const km = haversineKm(lat, lng, homeLat, homeLng);
+        if (km > 2) continue; // 2km yaklastigi zaman
+
+        const j = pending.find((p) => p.enrollmentId === e.id);
+        if (!j) continue;
+        const minutes = Math.max(1, Math.round(km * 2)); // sehir ici 2 dk/km
+        // Veliye + tum guardian'lara push
+        const guardians = await this.guardians.find({ where: { studentId: e.student.id } });
+        const parentIds = new Set<string>([e.parent.id, ...guardians.map((g) => g.parentId)]);
+        for (const pid of parentIds) {
+          void this.push.sendToRecipient('parent', pid, {
+            title: 'Servis yaklaşıyor',
+            body: `${e.student.name} için servis ~${minutes} dk uzaklıkta.`,
+            data: { type: 'trip.proximity', tripId, enrollmentId: e.id },
+          });
+        }
+        j.proximityNotifiedAt = new Date();
+        await this.tripEnrollments.save(j);
+      }
+    } catch (err) {
+      // sessiz - konum guncelleme akisi bozulmasin
+    }
   }
 
   async end(providerId: string, tripId: string) {

@@ -55,6 +55,18 @@ export class EnrollmentsMeController {
   end(@Req() req: ProviderRequest, @Param('id') id: string) {
     return this.svc.end(req.provider.id, id);
   }
+
+  // Duraklat: enrollment status = 'paused' + vehicleId = null (araca cikart)
+  @Post(':id/pause')
+  pause(@Req() req: ProviderRequest, @Param('id') id: string) {
+    return this.svc.setStatus(req.provider.id, id, 'paused');
+  }
+
+  // Aktifleştir (baska araca yeniden atanabilir)
+  @Post(':id/resume')
+  resume(@Req() req: ProviderRequest, @Param('id') id: string) {
+    return this.svc.setStatus(req.provider.id, id, 'active');
+  }
 }
 
 @UseGuards(ProviderJwtStrategy)

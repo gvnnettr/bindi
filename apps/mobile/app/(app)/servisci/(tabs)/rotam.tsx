@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api, ApiError } from '../../../../src/api/client';
 import { useAuth } from '../../../../src/state/auth';
@@ -86,6 +86,70 @@ export default function RotamScreen() {
     }
   }
 
+  function openStudentActions(enrollmentId: string, name: string) {
+    Alert.alert(name, undefined, [
+      {
+        text: 'Bindi',
+        onPress: () => markBoard(enrollmentId, 'boarded'),
+      },
+      {
+        text: 'Binmedi',
+        onPress: () => markBoard(enrollmentId, 'missed'),
+      },
+      {
+        text: 'Öğrenciyi Duraklat (Araçtan Çıkart)',
+        style: 'destructive',
+        onPress: () => pauseStudent(enrollmentId, name),
+      },
+      { text: 'Vazgeç', style: 'cancel' },
+    ]);
+  }
+
+  async function pauseStudent(enrollmentId: string, name: string) {
+    Alert.alert(
+      `${name} duraklatılsın mı?`,
+      'Öğrenci araçtan çıkarılır. Sonra yeniden aktifleştirip başka araca ekleyebilirsin.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Duraklat',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/me/enrollments/${enrollmentId}/pause`, {}, token);
+              await load();
+            } catch (e) {
+              Alert.alert('Hata', e instanceof ApiError ? e.message : (e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  }
+
+  async function endTrip() {
+    if (!trip) return;
+    Alert.alert(
+      'Servisi bitir?',
+      'Aktif servis sonlandırılır, veliler bilgilendirilir.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Bitir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.post(`/me/trips/${trip.id}/end`, {}, token);
+              await load();
+            } catch (e) {
+              Alert.alert('Hata', e instanceof ApiError ? e.message : (e as Error).message);
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const boardedCount = trip?.enrollments.filter((e) => e.boardStatus === 'boarded').length ?? 0;
   const totalCount = trip?.enrollments.length ?? 0;
 
@@ -99,10 +163,15 @@ export default function RotamScreen() {
           <Text style={styles.sub}>{today}</Text>
         </View>
         {trip && (
-          <View style={styles.liveBadge}>
-            <View style={styles.livePulse} />
-            <Text style={styles.liveText}>CANLI</Text>
-          </View>
+          <>
+            <View style={styles.liveBadge}>
+              <View style={styles.livePulse} />
+              <Text style={styles.liveText}>CANLI</Text>
+            </View>
+            <Pressable onPress={endTrip} style={styles.endBtn} hitSlop={8}>
+              <Text style={styles.endBtnText}>Bitir</Text>
+            </Pressable>
+          </>
         )}
       </View>
 
@@ -123,6 +192,12 @@ export default function RotamScreen() {
           <Text style={styles.emptySub}>
             Servisi başlat, öğrencileri seç — sonra bu ekrandan yoklama alırsın.
           </Text>
+          <Pressable
+            onPress={() => router.push('/(app)/servisci/servis')}
+            style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.startBtnText}>🚌 Servisi Başlat</Text>
+          </Pressable>
         </View>
       ) : (
         <ScrollView
@@ -163,8 +238,9 @@ export default function RotamScreen() {
             const isPending = e.boardStatus === 'pending';
             const isBusy = busyId === e.id;
             return (
-              <View
+              <Pressable
                 key={e.id}
+                onLongPress={() => openStudentActions(e.id, e.student.name)}
                 style={[
                   styles.studentRow,
                   isBoarded && styles.studentRowBoarded,
@@ -217,9 +293,12 @@ export default function RotamScreen() {
                     <Text style={styles.undoText}>↺</Text>
                   </Pressable>
                 )}
-              </View>
+              </Pressable>
             );
           })}
+          <Text style={styles.hint}>
+            Öğrenciye uzun bas → Duraklat (araçtan çıkart)
+          </Text>
         </ScrollView>
       )}
     </SafeAreaView>
@@ -307,4 +386,18 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   undoText: { fontSize: 16, color: colors.dark },
+  startBtn: {
+    marginTop: 20, paddingHorizontal: 24, paddingVertical: 14,
+    backgroundColor: colors.dark, borderRadius: 14,
+  },
+  startBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  endBtn: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: colors.danger, borderRadius: 10,
+  },
+  endBtnText: { color: colors.danger, fontSize: 12, fontWeight: '800' },
+  hint: {
+    fontSize: 11, color: colors.muted, textAlign: 'center' as const,
+    marginTop: 12, fontStyle: 'italic' as const,
+  },
 });

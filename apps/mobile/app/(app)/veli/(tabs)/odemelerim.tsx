@@ -24,6 +24,13 @@ import { colors } from '../../../../src/theme/colors';
 
 type PaymentStatus = 'pending' | 'submitted' | 'paid' | 'late' | 'waived';
 
+// Backend receiptUrl'i "/uploads/..." donuyor - API base ekle
+function absoluteUrl(u: string): string {
+  if (/^https?:\/\//i.test(u)) return u;
+  const base = API_URL.replace(/\/api$/, '');
+  return base + u;
+}
+
 interface Payment {
   id: string;
   period: string;
@@ -205,7 +212,7 @@ export default function OdemelerimScreen() {
 
               {item.receiptUrl && (
                 <Pressable
-                  onPress={() => setPreviewReceipt(item.receiptUrl!)}
+                  onPress={() => setPreviewReceipt(absoluteUrl(item.receiptUrl!))}
                   style={({ pressed }) => [styles.receiptRow, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={styles.receiptText}>📄 Dekont yüklendi{item.submittedAt ? ` · ${new Date(item.submittedAt).toLocaleDateString('tr-TR')}` : ''}</Text>

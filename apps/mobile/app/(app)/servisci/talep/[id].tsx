@@ -71,12 +71,17 @@ interface OfferStats {
   avg: number | null;
 }
 
+interface Pricing {
+  minPricePerKm: number;
+}
+
 export default function TalepDetayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token } = useAuth();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [stats, setStats] = useState<OfferStats | null>(null);
+  const [pricing, setPricing] = useState<Pricing | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [modal, setModal] = useState(false);
@@ -84,14 +89,16 @@ export default function TalepDetayScreen() {
   const load = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const [d, vs, st] = await Promise.all([
+      const [d, vs, st, pr] = await Promise.all([
         api.get<Detail>(`/me/requests/${id}`, token),
         api.get<Vehicle[]>('/me/vehicles', token),
         api.get<OfferStats>(`/me/requests/${id}/offer-stats`, token),
+        api.get<Pricing>('/public-settings/pricing'),
       ]);
       setDetail(d);
       setVehicles(vs);
       setStats(st);
+      setPricing(pr);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
@@ -299,6 +306,8 @@ export default function TalepDetayScreen() {
         onClose={() => setModal(false)}
         vehicles={vehicles}
         stats={stats}
+        distanceKm={detail?.distanceKm ?? null}
+        minPricePerKm={pricing?.minPricePerKm ?? 0}
         onSubmit={async (payload) => {
           if (!token || !id) return;
           try {
@@ -335,12 +344,16 @@ function OfferModal({
   onClose,
   vehicles,
   stats,
+  distanceKm,
+  minPricePerKm,
   onSubmit,
 }: {
   visible: boolean;
   onClose: () => void;
   vehicles: Vehicle[];
   stats: OfferStats | null;
+  distanceKm: number | null;
+  minPricePerKm: number;
   onSubmit: (payload: { monthlyPrice: string; vehicleId?: string; note?: string }) => Promise<void>;
 }) {
   const [price, setPrice] = useState('');
@@ -349,9 +362,22 @@ function OfferModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Admin min fiyat/km × mesafe = bu talep icin minimum aylik ucret
+  const effectiveKm = Math.max(1, Math.round((distanceKm ?? 0) * 10) / 10);
+  const minMonthly = minPricePerKm > 0 && distanceKm != null
+    ? Math.round(effectiveKm * minPricePerKm)
+    : 0;
+
+  const priceNumber = Number(price || 0);
+  const belowMin = minMonthly > 0 && priceNumber > 0 && priceNumber < minMonthly;
+
   async function submit() {
     if (!price || Number(price) < 100) {
       setError('Geçerli bir aylık ücret gir (min ₺100)');
+      return;
+    }
+    if (minMonthly > 0 && Number(price) < minMonthly) {
+      setError(`Bu talep için minimum ${minMonthly.toLocaleString('tr-TR')} ₺ (${effectiveKm} km × ${minPricePerKm.toLocaleString('tr-TR')} ₺/km).`);
       return;
     }
     setLoading(true);
@@ -391,6 +417,16 @@ function OfferModal({
             <ScrollView contentContainerStyle={modalStyles.body}>
               <ErrorBanner message={error} />
 
+              {minMonthly > 0 && (
+                <View style={statsStyles.minPriceCard}>
+                  <Text style={statsStyles.minPriceLabel}>MİNİMUM AYLIK ÜCRET</Text>
+                  <Text style={statsStyles.minPriceValue}>{minMonthly.toLocaleString('tr-TR')} ₺</Text>
+                  <Text style={statsStyles.minPriceHint}>
+                    {effectiveKm} km × {minPricePerKm.toLocaleString('tr-TR')} ₺/km (admin kuralı) — bu tutarın altında teklif kabul edilmez.
+                  </Text>
+                </View>
+              )}
+
               {stats && stats.count > 0 && (
                 <View style={statsStyles.statsCard}>
                   <Text style={statsStyles.statsHeader}>
@@ -428,10 +464,14 @@ function OfferModal({
                 label="Aylık Ücret (₺)"
                 value={price}
                 onChangeText={(v) => setPrice(v.replace(/\D/g, ''))}
-                placeholder="2500"
+                placeholder={minMonthly > 0 ? String(minMonthly) : '2500'}
                 keyboardType="number-pad"
                 autoFocus
-                hint="Sadece rakam · Aylık toplam"
+                hint={
+                  belowMin
+                    ? `⚠️ Minimum ${minMonthly.toLocaleString('tr-TR')} ₺ altında`
+                    : 'Sadece rakam · Aylık toplam'
+                }
               />
 
               {vehicles.length > 0 && (
@@ -779,5 +819,34 @@ const statsStyles = StyleSheet.create({
     fontSize: 11,
     color: colors.muted,
     fontStyle: 'italic' as const,
+  },
+  minPriceCard: {
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1.5,
+    borderColor: colors.warning,
+    alignItems: 'center' as const,
+  },
+  minPriceLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#78350F',
+    letterSpacing: 0.8,
+  },
+  minPriceValue: {
+    fontSize: 24,
+    fontWeight: '800' as const,
+    color: '#78350F',
+    marginTop: 4,
+    letterSpacing: -0.5,
+  },
+  minPriceHint: {
+    fontSize: 11,
+    color: '#78350F',
+    marginTop: 6,
+    textAlign: 'center' as const,
+    lineHeight: 16,
   },
 });

@@ -80,6 +80,9 @@ export class TripEnrollment {
   @Column({ name: 'board_status', length: 20, default: 'pending' })
   boardStatus!: BoardStatus;
 
+  @Column({ type: 'timestamptz', name: 'proximity_notified_at', nullable: true })
+  proximityNotifiedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 }

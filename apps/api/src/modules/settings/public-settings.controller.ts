@@ -18,4 +18,12 @@ export class PublicSettingsController {
       address: await this.settings.get(SETTINGS_KEYS.SITE_ADDRESS),
     };
   }
+
+  // Teklif ver modalinda kullanilir - client tarafinda min fiyat hesabi
+  @Get('pricing')
+  async pricing() {
+    const raw = await this.settings.get(SETTINGS_KEYS.OFFER_MIN_PRICE_PER_KM);
+    const minPricePerKm = raw ? Number(raw) : 0;
+    return { minPricePerKm };
+  }
 }

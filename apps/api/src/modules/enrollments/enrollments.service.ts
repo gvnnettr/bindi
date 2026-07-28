@@ -263,6 +263,19 @@ export class EnrollmentsService {
     return { ok: true };
   }
 
+  // Duraklat/aktifleştir - paused ise araçtan çıkart (vehicleId=null + orderNo=null)
+  async setStatus(providerId: string, id: string, status: 'active' | 'paused') {
+    const e = await this.enrollments.findOne({ where: { id, providerId } });
+    if (!e) throw new NotFoundException();
+    e.status = status;
+    if (status === 'paused') {
+      e.vehicleId = null;
+      e.orderNo = null;
+    }
+    await this.enrollments.save(e);
+    return { ok: true };
+  }
+
   async providerRevenueReport(providerId: string) {
     await this.assertTakipActive(providerId);
     const enrollments = await this.enrollments.find({
