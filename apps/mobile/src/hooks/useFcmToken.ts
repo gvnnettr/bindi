@@ -1,13 +1,11 @@
 import { useEffect } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { api } from '../api/client';
 import { useAuth, type Role } from '../state/auth';
 
-// DEBUG MODU: her adimda gorunur bilgi
-const DEBUG_PUSH = true;
+// Kullanici deneyimi icin popup KAPALI. Sadece konsol logu.
 function debug(msg: string) {
-  if (DEBUG_PUSH) Alert.alert('Push Debug', msg);
   console.warn('[push]', msg);
 }
 

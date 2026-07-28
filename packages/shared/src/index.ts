@@ -56,6 +56,7 @@ export const GUARDIAN_RELATIONS = [
   'dayı',
   'teyze',
   'hala',
+  'kardeş',
   'diğer',
 ] as const;
 export type GuardianRelation = (typeof GUARDIAN_RELATIONS)[number];

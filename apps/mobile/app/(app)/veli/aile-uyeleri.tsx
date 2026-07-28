@@ -34,14 +34,17 @@ interface Student {
 }
 
 const RELATIONS = [
-  { code: 'mother', label: 'Anne' },
-  { code: 'father', label: 'Baba' },
-  { code: 'grandmother', label: 'Anneanne / Babaanne' },
-  { code: 'grandfather', label: 'Dede' },
-  { code: 'uncle', label: 'Amca / Dayı' },
-  { code: 'aunt', label: 'Teyze / Hala' },
-  { code: 'sibling', label: 'Kardeş' },
-  { code: 'other', label: 'Diğer' },
+  { code: 'anne', label: 'Anne' },
+  { code: 'baba', label: 'Baba' },
+  { code: 'anneanne', label: 'Anneanne' },
+  { code: 'babaanne', label: 'Babaanne' },
+  { code: 'dede', label: 'Dede' },
+  { code: 'amca', label: 'Amca' },
+  { code: 'dayı', label: 'Dayı' },
+  { code: 'teyze', label: 'Teyze' },
+  { code: 'hala', label: 'Hala' },
+  { code: 'kardeş', label: 'Kardeş' },
+  { code: 'diğer', label: 'Diğer' },
 ];
 
 export default function AileUyeleriScreen() {
@@ -265,7 +268,7 @@ function InviteModal({
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [relation, setRelation] = useState('mother');
+  const [relation, setRelation] = useState('anne');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -337,6 +337,7 @@ export class ParentsService {
         class: s.class,
         school: s.school ? { id: s.school.id, name: s.school.name } : null,
         isPrimary: true,
+        isOwner: true,
         relation: 'primary',
       });
     }
@@ -350,6 +351,7 @@ export class ParentsService {
           ? { id: g.student.school.id, name: g.student.school.name }
           : null,
         isPrimary: g.isPrimary,
+        isOwner: false,
         relation: g.relation,
       });
     }
