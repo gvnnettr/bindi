@@ -4,7 +4,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Trip, TripEnrollment, Enrollment, StudentGuardian, Offer } from '@servis/db';
 import { TripsService } from './trips.service';
-import { ProviderTripsController, ParentTripsController } from './trips.controller';
+import {
+  ProviderTripsController,
+  ParentTripsController,
+  ProviderVehicleAssignController,
+  ProviderEnrollmentAssignController,
+} from './trips.controller';
 import { ProvidersModule } from '../providers/providers.module';
 import { ParentsModule } from '../parents/parents.module';
 
@@ -20,7 +25,12 @@ import { ParentsModule } from '../parents/parents.module';
     ProvidersModule,
     ParentsModule,
   ],
-  controllers: [ProviderTripsController, ParentTripsController],
+  controllers: [
+    ProviderTripsController,
+    ParentTripsController,
+    ProviderVehicleAssignController,
+    ProviderEnrollmentAssignController,
+  ],
   providers: [TripsService],
 })
 export class TripsModule {}

@@ -30,6 +30,21 @@ interface Vehicle {
   seats: number;
 }
 
+interface VehicleStudent {
+  id: string;
+  orderNo: number | null;
+  student: { id: string; name: string; class: string | null };
+  school: { id: string; name: string } | null;
+  parentPhone: string;
+  address: string | null;
+}
+
+interface UnassignedEnrollment {
+  id: string;
+  student: { id: string; name: string };
+  school: { name: string } | null;
+}
+
 interface DocRow {
   definition: {
     id: string;
@@ -58,6 +73,8 @@ export default function AracDetayScreen() {
   const { token } = useAuth();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [docs, setDocs] = useState<DocRow[]>([]);
+  const [students, setStudents] = useState<VehicleStudent[]>([]);
+  const [showAddStudent, setShowAddStudent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,17 +83,50 @@ export default function AracDetayScreen() {
   const load = useCallback(async () => {
     if (!token || !id) return;
     try {
-      const [vs, ds] = await Promise.all([
+      const [vs, ds, sts] = await Promise.all([
         api.get<Vehicle[]>('/me/vehicles', token),
         api.get<DocRow[]>(`/me/vehicles/${id}/documents`, token),
+        api.get<VehicleStudent[]>(`/me/vehicles/${id}/students`, token),
       ]);
       setVehicle(vs.find((v) => v.id === id) ?? null);
       setDocs(ds);
+      setStudents(sts);
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : (e as Error).message);
     }
   }, [id, token]);
+
+  async function moveStudent(index: number, dir: 'up' | 'down') {
+    const newList = [...students];
+    const swapIdx = dir === 'up' ? index - 1 : index + 1;
+    if (swapIdx < 0 || swapIdx >= newList.length) return;
+    [newList[index], newList[swapIdx]] = [newList[swapIdx], newList[index]];
+    setStudents(newList);
+    try {
+      await api.patch(
+        `/me/vehicles/${id}/students-order`,
+        { enrollmentIds: newList.map((s) => s.id) },
+        token,
+      );
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+      await load();
+    }
+  }
+
+  async function removeStudent(enrollmentId: string) {
+    try {
+      await api.patch(
+        `/me/vehicle-pool/assign/${enrollmentId}`,
+        { vehicleId: null },
+        token,
+      );
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    }
+  }
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
@@ -128,6 +178,61 @@ export default function AracDetayScreen() {
           </View>
         )}
 
+        {/* Ogrenciler bolumu */}
+        <View style={styles.studentSection}>
+          <View style={styles.studentSectionHead}>
+            <Text style={styles.sectionTitle}>
+              Öğrenciler ({students.length}{vehicle ? `/${vehicle.seats}` : ''})
+            </Text>
+            <Pressable onPress={() => setShowAddStudent(true)} style={styles.studentAddBtn} hitSlop={8}>
+              <Text style={styles.studentAddBtnText}>+ Ekle</Text>
+            </Pressable>
+          </View>
+
+          {students.length === 0 ? (
+            <View style={styles.empty}>
+              <Text style={styles.emptySub}>
+                Henüz atanmış öğrenci yok. Teklifin kabul olduğu öğrencileri "+ Ekle" ile bu araca ata.
+              </Text>
+            </View>
+          ) : (
+            students.map((s, i) => (
+              <View key={s.id} style={styles.studentRow}>
+                <View style={styles.studentOrder}>
+                  <Text style={styles.studentOrderNum}>{i + 1}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.studentName}>{s.student.name}</Text>
+                  <Text style={styles.studentMeta} numberOfLines={1}>
+                    {s.school?.name ?? '—'}{s.address ? ` · ${s.address}` : ''}
+                  </Text>
+                </View>
+                <View style={styles.studentActions}>
+                  <Pressable
+                    onPress={() => moveStudent(i, 'up')}
+                    disabled={i === 0}
+                    style={[styles.arrowBtn, i === 0 && { opacity: 0.3 }]}
+                    hitSlop={4}
+                  >
+                    <Text style={styles.arrowText}>↑</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => moveStudent(i, 'down')}
+                    disabled={i === students.length - 1}
+                    style={[styles.arrowBtn, i === students.length - 1 && { opacity: 0.3 }]}
+                    hitSlop={4}
+                  >
+                    <Text style={styles.arrowText}>↓</Text>
+                  </Pressable>
+                  <Pressable onPress={() => removeStudent(s.id)} style={styles.arrowBtn} hitSlop={4}>
+                    <Text style={[styles.arrowText, { color: colors.danger }]}>✕</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
         <Text style={styles.sectionTitle}>Belgeler</Text>
         {docs.map((row) => (
           <DocumentCard key={row.definition.id} row={row} onUpload={() => setUploadFor(row)} />
@@ -150,7 +255,112 @@ export default function AracDetayScreen() {
           await load();
         }}
       />
+
+      <AddStudentModal
+        visible={showAddStudent}
+        vehicleId={id ?? ''}
+        onClose={() => setShowAddStudent(false)}
+        onDone={async () => {
+          setShowAddStudent(false);
+          await load();
+        }}
+      />
     </SafeAreaView>
+  );
+}
+
+function AddStudentModal({
+  visible,
+  vehicleId,
+  onClose,
+  onDone,
+}: {
+  visible: boolean;
+  vehicleId: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const { token } = useAuth();
+  const [pool, setPool] = useState<UnassignedEnrollment[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    try {
+      const r = await api.get<UnassignedEnrollment[]>('/me/vehicle-pool/unassigned', token);
+      setPool(r);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    }
+  }, [token]);
+
+  useFocusEffect(useCallback(() => { if (visible) void load(); }, [visible, load]));
+
+  async function assign(enrollmentId: string) {
+    setBusyId(enrollmentId);
+    try {
+      await api.patch(
+        `/me/vehicle-pool/assign/${enrollmentId}`,
+        { vehicleId },
+        token,
+      );
+      await load();
+      onDone();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={mstyles.backdrop}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
+          <View style={mstyles.sheet}>
+            <View style={mstyles.grabber} />
+            <View style={mstyles.headerRow}>
+              <Text style={mstyles.title}>Araca Öğrenci Ekle</Text>
+              <Pressable onPress={onClose} hitSlop={12}><Text style={mstyles.close}>✕</Text></Pressable>
+            </View>
+            <ScrollView contentContainerStyle={mstyles.body} keyboardShouldPersistTaps="handled">
+              <ErrorBanner message={error} />
+              {pool.length === 0 ? (
+                <View style={{ padding: 24, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: colors.muted, textAlign: 'center' }}>
+                    Atanmamış aktif kayıt yok. Tüm öğrenciler zaten bir araçta.
+                  </Text>
+                </View>
+              ) : (
+                pool.map((p) => (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => assign(p.id)}
+                    disabled={busyId === p.id}
+                    style={({ pressed }) => [
+                      styles.studentRow,
+                      { marginBottom: 8 },
+                      pressed && { opacity: 0.6 },
+                    ]}
+                  >
+                    <View style={styles.studentOrder}>
+                      <Text style={styles.studentOrderNum}>+</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.studentName}>{p.student.name}</Text>
+                      <Text style={styles.studentMeta}>{p.school?.name ?? '—'}</Text>
+                    </View>
+                    <Text style={{ fontSize: 22, color: colors.muted }}>›</Text>
+                  </Pressable>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
@@ -444,4 +654,35 @@ const styles = StyleSheet.create({
   uploadBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
   empty: { padding: 20, alignItems: 'center' },
   emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center' },
+
+  studentSection: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 12,
+    gap: 8,
+    marginBottom: 4,
+  },
+  studentSectionHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  studentAddBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.dark, borderRadius: 8 },
+  studentAddBtnText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  studentRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    padding: 10, backgroundColor: colors.bg, borderRadius: 10,
+  },
+  studentOrder: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: colors.dark, alignItems: 'center', justifyContent: 'center',
+  },
+  studentOrderNum: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  studentName: { fontSize: 13, fontWeight: '700', color: colors.dark },
+  studentMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  studentActions: { flexDirection: 'row', gap: 4 },
+  arrowBtn: {
+    width: 28, height: 28, borderRadius: 6,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  arrowText: { fontSize: 14, color: colors.dark, fontWeight: '700' },
 });

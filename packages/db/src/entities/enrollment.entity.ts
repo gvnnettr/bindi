@@ -65,6 +65,9 @@ export class Enrollment {
   @Column({ length: 20, default: 'active' })
   status!: EnrollmentStatus;
 
+  @Column({ type: 'int', name: 'order_no', nullable: true })
+  orderNo!: number | null;
+
   @Column({ type: 'text', nullable: true })
   note!: string | null;
 

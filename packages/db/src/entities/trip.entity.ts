@@ -59,6 +59,8 @@ export class Trip {
   updatedAt!: Date;
 }
 
+export type BoardStatus = 'pending' | 'boarded' | 'missed';
+
 @Entity({ name: 'trip_enrollments' })
 @Index('idx_trip_enrollments_trip', ['tripId'])
 @Index('idx_trip_enrollments_enrollment', ['enrollmentId'])
@@ -71,6 +73,12 @@ export class TripEnrollment {
 
   @Column({ type: 'uuid', name: 'enrollment_id' })
   enrollmentId!: string;
+
+  @Column({ type: 'timestamptz', name: 'boarded_at', nullable: true })
+  boardedAt!: Date | null;
+
+  @Column({ name: 'board_status', length: 20, default: 'pending' })
+  boardStatus!: BoardStatus;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;

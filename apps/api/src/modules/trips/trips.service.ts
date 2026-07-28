@@ -139,7 +139,14 @@ export class TripsService {
     const enrollmentIds = junctions.map((j) => j.enrollmentId);
     const es = await this.enrollments.find({
       where: { id: In(enrollmentIds) },
-      relations: ['student', 'parent'],
+      relations: ['student', 'parent', 'offer', 'offer.request'],
+    });
+    const junctionMap = new Map(junctions.map((j) => [j.enrollmentId, j]));
+    // orderNo'ya gore siralanmis, null'lar sona
+    const sortedEs = [...es].sort((a, b) => {
+      const ao = a.orderNo ?? 999999;
+      const bo = b.orderNo ?? 999999;
+      return ao - bo;
     });
     return {
       id: trip.id,
@@ -154,12 +161,131 @@ export class TripsService {
         model: trip.vehicle.model,
         plate: trip.vehicle.plate,
       } : null,
-      enrollments: es.map((e) => ({
-        id: e.id,
-        student: { id: e.student.id, name: e.student.name },
-        parent: { id: e.parent.id, name: e.parent.name },
-      })),
+      enrollments: sortedEs.map((e) => {
+        const j = junctionMap.get(e.id);
+        return {
+          id: e.id,
+          orderNo: e.orderNo,
+          boardStatus: j?.boardStatus ?? 'pending',
+          boardedAt: j?.boardedAt ?? null,
+          student: { id: e.student.id, name: e.student.name },
+          parent: { id: e.parent.id, name: e.parent.name },
+          address: e.offer?.request?.address ?? null,
+        };
+      }),
     };
+  }
+
+  async markBoarding(
+    providerId: string,
+    tripId: string,
+    input: { enrollmentId: string; status: 'boarded' | 'missed' | 'pending' },
+  ) {
+    const trip = await this.trips.findOne({ where: { id: tripId, providerId } });
+    if (!trip) throw new NotFoundException('Servis bulunamadı');
+    if (trip.status !== 'active') throw new BadRequestException('Servis aktif değil');
+    const junction = await this.tripEnrollments.findOne({
+      where: { tripId, enrollmentId: input.enrollmentId },
+    });
+    if (!junction) throw new NotFoundException('Öğrenci bu serviste değil');
+    junction.boardStatus = input.status;
+    junction.boardedAt = input.status === 'boarded' ? new Date() : null;
+    await this.tripEnrollments.save(junction);
+
+    if (input.status === 'boarded') {
+      // Veliye + guardian'lara push
+      const e = await this.enrollments.findOne({
+        where: { id: input.enrollmentId },
+        relations: ['student', 'parent'],
+      });
+      if (e) {
+        const guardians = await this.guardians.find({ where: { studentId: e.student.id } });
+        const parentIds = new Set<string>([e.parent.id, ...guardians.map((g) => g.parentId)]);
+        const time = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+        for (const pid of parentIds) {
+          void this.push.sendToRecipient('parent', pid, {
+            title: 'Servise bindi',
+            body: `${e.student.name} · ${time}'de araca bindi.`,
+            data: { type: 'trip.boarded', tripId, enrollmentId: input.enrollmentId },
+          });
+        }
+      }
+    }
+    return { ok: true };
+  }
+
+  // Araç detay: bu araca atanmiş aktif enrollment'lari siralanmiş döndür
+  async listVehicleStudents(providerId: string, vehicleId: string) {
+    const es = await this.enrollments.find({
+      where: { providerId, vehicleId, status: 'active' },
+      relations: ['student', 'student.school', 'parent', 'offer', 'offer.request'],
+    });
+    const sorted = [...es].sort((a, b) => {
+      const ao = a.orderNo ?? 999999;
+      const bo = b.orderNo ?? 999999;
+      return ao - bo;
+    });
+    return sorted.map((e) => ({
+      id: e.id,
+      orderNo: e.orderNo,
+      student: { id: e.student.id, name: e.student.name, class: e.student.class },
+      school: e.student.school ? { id: e.student.school.id, name: e.student.school.name } : null,
+      parentPhone: e.parent.phone,
+      address: e.offer?.request?.address ?? null,
+    }));
+  }
+
+  // Bu servisçinin araca atanmamış aktif enrollment'ları (Ekle listesi için)
+  async listUnassignedEnrollments(providerId: string) {
+    const es = await this.enrollments.find({
+      where: { providerId, vehicleId: IsNull(), status: 'active' },
+      relations: ['student', 'student.school'],
+    });
+    return es.map((e) => ({
+      id: e.id,
+      student: { id: e.student.id, name: e.student.name },
+      school: e.student.school ? { name: e.student.school.name } : null,
+    }));
+  }
+
+  async assignEnrollmentToVehicle(
+    providerId: string,
+    enrollmentId: string,
+    vehicleId: string | null,
+  ) {
+    const e = await this.enrollments.findOne({ where: { id: enrollmentId, providerId } });
+    if (!e) throw new NotFoundException('Kayıt bulunamadı');
+    e.vehicleId = vehicleId;
+    // Yeni araca eklendiginde en sona koy
+    if (vehicleId) {
+      const existing = await this.enrollments.find({ where: { providerId, vehicleId } });
+      const maxOrder = existing.reduce((mx, x) => Math.max(mx, x.orderNo ?? 0), 0);
+      e.orderNo = maxOrder + 1;
+    } else {
+      e.orderNo = null;
+    }
+    await this.enrollments.save(e);
+    return { ok: true };
+  }
+
+  async reorderVehicleStudents(
+    providerId: string,
+    vehicleId: string,
+    orderedEnrollmentIds: string[],
+  ) {
+    const es = await this.enrollments.find({
+      where: { providerId, vehicleId, status: 'active' },
+    });
+    const byId = new Map(es.map((e) => [e.id, e]));
+    let i = 1;
+    for (const eid of orderedEnrollmentIds) {
+      const e = byId.get(eid);
+      if (e) {
+        e.orderNo = i++;
+        await this.enrollments.save(e);
+      }
+    }
+    return { ok: true };
   }
 
   async getActiveTripsForParent(parentId: string) {

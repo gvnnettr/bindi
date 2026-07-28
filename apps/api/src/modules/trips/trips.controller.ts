@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -10,11 +11,13 @@ import {
 import {
   ArrayMinSize,
   IsArray,
+  IsIn,
   IsLatitude,
   IsLongitude,
   IsOptional,
   IsString,
   Length,
+  ValidateIf,
 } from 'class-validator';
 import { TripsService } from './trips.service';
 import { ProviderJwtStrategy, ProviderRequest } from '../providers/provider-jwt.strategy';
@@ -29,6 +32,22 @@ class StartTripDto {
 class LocationDto {
   @IsLatitude() lat!: number;
   @IsLongitude() lng!: number;
+}
+
+class BoardDto {
+  @IsString() enrollmentId!: string;
+  @IsIn(['boarded', 'missed', 'pending']) status!: 'boarded' | 'missed' | 'pending';
+}
+
+class AssignVehicleDto {
+  @ValidateIf((_, v) => v !== null)
+  @IsOptional()
+  @IsString()
+  vehicleId!: string | null;
+}
+
+class ReorderDto {
+  @IsArray() @IsString({ each: true }) enrollmentIds!: string[];
 }
 
 @UseGuards(ProviderJwtStrategy)
@@ -54,6 +73,46 @@ export class ProviderTripsController {
   @Post(':id/end')
   end(@Req() req: ProviderRequest, @Param('id') id: string) {
     return this.svc.end(req.provider.id, id);
+  }
+
+  @Post(':id/board')
+  board(@Req() req: ProviderRequest, @Param('id') id: string, @Body() dto: BoardDto) {
+    return this.svc.markBoarding(req.provider.id, id, dto);
+  }
+}
+
+// Ayrı controller: araç öğrencileri + atama
+@UseGuards(ProviderJwtStrategy)
+@Controller('me/vehicles')
+export class ProviderVehicleAssignController {
+  constructor(private readonly svc: TripsService) {}
+
+  @Get(':id/students')
+  listStudents(@Req() req: ProviderRequest, @Param('id') id: string) {
+    return this.svc.listVehicleStudents(req.provider.id, id);
+  }
+
+  @Patch(':id/students-order')
+  reorder(@Req() req: ProviderRequest, @Param('id') id: string, @Body() dto: ReorderDto) {
+    return this.svc.reorderVehicleStudents(req.provider.id, id, dto.enrollmentIds);
+  }
+}
+
+@UseGuards(ProviderJwtStrategy)
+@Controller('me/vehicle-pool')
+export class ProviderEnrollmentAssignController {
+  constructor(private readonly svc: TripsService) {}
+
+  // Araca atanmamis aktif enrollment'lar
+  @Get('unassigned')
+  unassigned(@Req() req: ProviderRequest) {
+    return this.svc.listUnassignedEnrollments(req.provider.id);
+  }
+
+  // Bir enrollment'i araca ata / araci kaldir
+  @Patch('assign/:id')
+  assign(@Req() req: ProviderRequest, @Param('id') id: string, @Body() dto: AssignVehicleDto) {
+    return this.svc.assignEnrollmentToVehicle(req.provider.id, id, dto.vehicleId ?? null);
   }
 }
 
