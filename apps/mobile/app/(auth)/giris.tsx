@@ -46,7 +46,7 @@ interface LoginResp {
  * Adım 2: Duruma göre şifre / OTP+şifre-belirle / kayıt formu
  */
 export default function GirisScreen() {
-  const { role } = useLocalSearchParams<{ role: Role }>();
+  const { role, autoBio } = useLocalSearchParams<{ role: Role; autoBio?: string }>();
   const { setSession } = useAuth();
   const isProvider = role === 'provider';
 
@@ -73,8 +73,13 @@ export default function GirisScreen() {
       if (!saved) return;
       if (isProvider !== (saved.role === 'provider')) return;
       setSavedForBiometric(true);
+      // autoBio=1 ile splash'ten yonlendirildiyse: gecikmesiz biometric prompt ac
+      if (autoBio === '1') {
+        setTimeout(() => { void tryBiometricLogin(); }, 300);
+      }
     })();
-  }, [isProvider]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isProvider, autoBio]);
 
   async function tryBiometricLogin() {
     const saved = await loadCredentials();

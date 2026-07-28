@@ -5,18 +5,50 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../src/state/auth';
 import { storage } from '../src/state/storage';
 import { colors } from '../src/theme/colors';
+import {
+  isBiometricEnabled,
+  isBiometricSupported,
+  loadCredentials,
+} from '../src/lib/biometric';
+
+const MIN_SPLASH_MS = 1500;
 
 export default function SplashRouter() {
   const { ready, role, token } = useAuth();
 
   useEffect(() => {
     if (!ready) return;
+    const startedAt = Date.now();
     (async () => {
+      // Aktif session varsa dogrudan app'e
       if (role && token) {
+        await waitMin(startedAt);
         router.replace(role === 'provider' ? '/(app)/servisci' : '/(app)/veli');
         return;
       }
+
       const onboarded = await storage.get(storage.KEYS.onboardingDone);
+
+      // Session yoksa ama biometric kayitliysa: rol ekranini atla, giris'e biometric flag ile git
+      if (onboarded) {
+        const [supported, enabled] = await Promise.all([
+          isBiometricSupported(),
+          isBiometricEnabled(),
+        ]);
+        if (supported && enabled) {
+          const saved = await loadCredentials();
+          if (saved) {
+            await waitMin(startedAt);
+            router.replace({
+              pathname: '/(auth)/giris',
+              params: { role: saved.role, autoBio: '1' },
+            });
+            return;
+          }
+        }
+      }
+
+      await waitMin(startedAt);
       router.replace(onboarded ? '/(auth)/rol' : '/onboarding');
     })();
   }, [ready, role, token]);
@@ -69,3 +101,9 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
 });
+
+async function waitMin(startedAt: number): Promise<void> {
+  const elapsed = Date.now() - startedAt;
+  const wait = MIN_SPLASH_MS - elapsed;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+}

@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../../../../src/state/auth';
+import { storage } from '../../../../src/state/storage';
 import { colors } from '../../../../src/theme/colors';
 
 interface MenuItem {
@@ -69,6 +70,15 @@ export default function MenuScreen() {
       desc: 'SSS, destek',
       icon: <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 0 1-3.46 0" />,
       onPress: () => router.push('/(auth)/yardim'),
+    },
+    {
+      label: 'Uygulamayı Tanı',
+      desc: 'Karşılama ekranlarını tekrar gör',
+      icon: <Path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />,
+      onPress: async () => {
+        await storage.del(storage.KEYS.onboardingDone);
+        router.replace('/onboarding');
+      },
     },
   ];
 
