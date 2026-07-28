@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, RefreshControl, Linking, Platform, Modal } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { router, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, ApiError } from '../../../src/api/client';
 import { useAuth } from '../../../src/state/auth';
 import { colors } from '../../../src/theme/colors';
@@ -135,6 +135,7 @@ export default function ServisTakipScreen() {
 
 function TripCard({ trip }: { trip: ActiveTrip }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const insets = useSafeAreaInsets();
   const hasLocation = trip.currentLat != null && trip.currentLng != null;
   const hasHome = trip.homeLat != null && trip.homeLng != null;
 
@@ -255,8 +256,8 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
       </View>
 
       <Modal visible={fullscreen} animationType="slide" onRequestClose={() => setFullscreen(false)}>
-        <SafeAreaView style={{ flex: 1, backgroundColor: colors.dark }} edges={['top', 'bottom']}>
-          <View style={styles.fsHeader}>
+        <View style={{ flex: 1, backgroundColor: colors.dark }}>
+          <View style={[styles.fsHeader, { paddingTop: insets.top + 8 }]}>
             <Pressable onPress={() => setFullscreen(false)} hitSlop={20} style={styles.fsClose}>
               <Text style={styles.fsCloseText}>✕</Text>
             </Pressable>
@@ -293,7 +294,7 @@ function TripCard({ trip }: { trip: ActiveTrip }) {
               )}
             </MapView>
           )}
-        </SafeAreaView>
+        </View>
       </Modal>
     </View>
   );
