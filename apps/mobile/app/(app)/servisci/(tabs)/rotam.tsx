@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,6 +39,14 @@ function timeStr(iso: string | null): string {
   return new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
 }
 
+interface VehicleOpt {
+  id: string;
+  brand: string;
+  model: string;
+  plate: string;
+  seats: number;
+}
+
 export default function RotamScreen() {
   const { token } = useAuth();
   const [trip, setTrip] = useState<ActiveTrip | null>(null);
@@ -45,6 +54,7 @@ export default function RotamScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [showStart, setShowStart] = useState(false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -193,7 +203,7 @@ export default function RotamScreen() {
             Servisi başlat, öğrencileri seç — sonra bu ekrandan yoklama alırsın.
           </Text>
           <Pressable
-            onPress={() => router.push('/(app)/servisci/servis')}
+            onPress={() => setShowStart(true)}
             style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.85 }]}
           >
             <Text style={styles.startBtnText}>🚌 Servisi Başlat</Text>
@@ -301,9 +311,167 @@ export default function RotamScreen() {
           </Text>
         </ScrollView>
       )}
+
+      <StartTripModal
+        visible={showStart}
+        onClose={() => setShowStart(false)}
+        onStarted={async () => {
+          setShowStart(false);
+          await load();
+        }}
+      />
     </SafeAreaView>
   );
 }
+
+function StartTripModal({
+  visible,
+  onClose,
+  onStarted,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onStarted: () => void;
+}) {
+  const { token } = useAuth();
+  const [vehicles, setVehicles] = useState<VehicleOpt[]>([]);
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [session, setSession] = useState<'morning' | 'evening'>('morning');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!token || !visible) return;
+    try {
+      const vs = await api.get<VehicleOpt[]>('/me/vehicles', token);
+      setVehicles(vs);
+      // Sabah / akşam otomatik seç: 12:00 öncesi sabah
+      const h = new Date().getHours();
+      setSession(h < 12 ? 'morning' : 'evening');
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    }
+  }, [token, visible]);
+
+  useFocusEffect(useCallback(() => { void load(); }, [load]));
+
+  async function start() {
+    if (!vehicleId) { setError('Araç seç'); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      await api.post(
+        '/me/trips/start-vehicle',
+        { vehicleId, session },
+        token,
+      );
+      onStarted();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={ss.backdrop}>
+        <View style={ss.sheet}>
+          <View style={ss.grabber} />
+          <View style={ss.headerRow}>
+            <Text style={ss.title}>Servisi Başlat</Text>
+            <Pressable onPress={onClose} hitSlop={12}><Text style={ss.close}>✕</Text></Pressable>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 20 }}>
+            {error && (
+              <View style={ss.errorBox}>
+                <Text style={ss.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <Text style={ss.label}>SEFER</Text>
+            <View style={ss.sessionRow}>
+              <Pressable
+                onPress={() => setSession('morning')}
+                style={[ss.sessionBtn, session === 'morning' && ss.sessionBtnActive]}
+              >
+                <Text style={[ss.sessionText, session === 'morning' && ss.sessionTextActive]}>☀️ Sabah</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setSession('evening')}
+                style={[ss.sessionBtn, session === 'evening' && ss.sessionBtnActive]}
+              >
+                <Text style={[ss.sessionText, session === 'evening' && ss.sessionTextActive]}>🌇 Akşam</Text>
+              </Pressable>
+            </View>
+
+            <Text style={ss.label}>ARAÇ SEÇ</Text>
+            {vehicles.length === 0 ? (
+              <Text style={ss.hint}>Önce Menü → Araçlarım'dan araç eklemelisin.</Text>
+            ) : (
+              vehicles.map((v) => (
+                <Pressable
+                  key={v.id}
+                  onPress={() => setVehicleId(v.id)}
+                  style={[ss.vehicleRow, vehicleId === v.id && ss.vehicleRowActive]}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={ss.vehicleName}>{v.brand} {v.model}</Text>
+                    <Text style={ss.vehicleMeta}>{v.seats} kişilik</Text>
+                  </View>
+                  <Text style={ss.plate}>{v.plate}</Text>
+                </Pressable>
+              ))
+            )}
+
+            <Text style={ss.hintSmall}>
+              Bu araca atanmış öğrenciler otomatik listelenir. Bugün gelmeyeceğini bildiren öğrenci varsa listeden düşer.
+            </Text>
+
+            <Pressable
+              onPress={start}
+              disabled={loading || !vehicleId}
+              style={[ss.startBtn, (!vehicleId || loading) && { opacity: 0.5 }]}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={ss.startBtnText}>🚌 Başlat</Text>
+              )}
+            </Pressable>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const ss = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
+  grabber: { width: 40, height: 4, backgroundColor: colors.borderStrong, borderRadius: 2, alignSelf: 'center' as const, marginTop: 10 },
+  headerRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  title: { fontSize: 18, fontWeight: '800' as const, color: colors.dark },
+  close: { fontSize: 20, color: colors.muted, fontWeight: '700' as const },
+  label: { fontSize: 11, fontWeight: '800' as const, color: colors.muted, textTransform: 'uppercase' as const, letterSpacing: 0.8, marginTop: 8, marginBottom: 8 },
+  sessionRow: { flexDirection: 'row' as const, gap: 10, marginBottom: 16 },
+  sessionBtn: { flex: 1, padding: 14, borderRadius: 12, backgroundColor: colors.bg, borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const },
+  sessionBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sessionText: { fontSize: 14, fontWeight: '700' as const, color: colors.dark },
+  sessionTextActive: { color: colors.dark },
+  vehicleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, padding: 14, backgroundColor: colors.card, borderRadius: 12, borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
+  vehicleRowActive: { borderColor: colors.dark, borderWidth: 2, backgroundColor: colors.primarySoft },
+  vehicleName: { fontSize: 14, fontWeight: '800' as const, color: colors.dark },
+  vehicleMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  plate: { fontSize: 12, fontWeight: '800' as const, color: colors.dark, backgroundColor: colors.primary, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  hint: { fontSize: 12, color: colors.muted, padding: 14, textAlign: 'center' as const },
+  hintSmall: { fontSize: 11, color: colors.muted, marginTop: 8, fontStyle: 'italic' as const, textAlign: 'center' as const },
+  startBtn: { marginTop: 20, padding: 16, borderRadius: 14, backgroundColor: colors.dark, alignItems: 'center' as const },
+  startBtnText: { color: '#fff', fontSize: 16, fontWeight: '800' as const },
+  errorBox: { padding: 12, backgroundColor: '#FEF2F2', borderColor: '#FECACA', borderWidth: 1, borderRadius: 10, marginBottom: 12 },
+  errorText: { color: '#991B1B', fontSize: 12, fontWeight: '600' as const },
+});
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },

@@ -31,3 +31,4 @@ export * from './entities/mobile-push-token.entity';
 export * from './entities/trip.entity';
 export * from './entities/enabled-city.entity';
 export * from './entities/admin-activity-log.entity';
+export * from './entities/student-absence.entity';

@@ -41,11 +41,13 @@ export default function OgrencilerimScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modal, setModal] = useState(false);
   const [editStudent, setEditStudent] = useState<Student | null>(null);
+  const [absenceStudent, setAbsenceStudent] = useState<Student | null>(null);
 
   function openActions(item: Student) {
     if (!item.isOwner) return;
     Alert.alert(item.name, undefined, [
       { text: 'Düzenle', onPress: () => setEditStudent(item) },
+      { text: '📅 Devamsızlık', onPress: () => setAbsenceStudent(item) },
       { text: 'Sil', style: 'destructive', onPress: () => removeStudent(item.id, item.name) },
       { text: 'Vazgeç', style: 'cancel' },
     ]);
@@ -135,13 +137,22 @@ export default function OgrencilerimScreen() {
               </Text>
             </View>
             {item.isOwner && (
-              <Pressable
-                onPress={() => openActions(item)}
-                hitSlop={8}
-                style={styles.moreBtn}
-              >
-                <Text style={styles.moreText}>⋯</Text>
-              </Pressable>
+              <>
+                <Pressable
+                  onPress={() => setAbsenceStudent(item)}
+                  hitSlop={6}
+                  style={styles.calBtn}
+                >
+                  <Text style={styles.calText}>📅</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => openActions(item)}
+                  hitSlop={8}
+                  style={styles.moreBtn}
+                >
+                  <Text style={styles.moreText}>⋯</Text>
+                </Pressable>
+              </>
             )}
           </Pressable>
         )}
@@ -164,9 +175,248 @@ export default function OgrencilerimScreen() {
           await load();
         }}
       />
+
+      <AbsenceModal
+        student={absenceStudent}
+        onClose={() => setAbsenceStudent(null)}
+      />
     </SafeAreaView>
   );
 }
+
+interface Absence {
+  id: string;
+  date: string;
+  session: 'morning' | 'evening' | 'both';
+  reason: string | null;
+}
+
+function AbsenceModal({
+  student,
+  onClose,
+}: {
+  student: Student | null;
+  onClose: () => void;
+}) {
+  const { token } = useAuth();
+  const [absences, setAbsences] = useState<Absence[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<'morning' | 'evening' | 'both'>('both');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [monthCursor, setMonthCursor] = useState(new Date());
+
+  const load = useCallback(async () => {
+    if (!student || !token) return;
+    try {
+      const y = monthCursor.getFullYear();
+      const m = monthCursor.getMonth();
+      const from = new Date(y, m, 1).toISOString().slice(0, 10);
+      const to = new Date(y, m + 1, 0).toISOString().slice(0, 10);
+      const rows = await api.get<Absence[]>(
+        `/me/parent/students/${student.id}/absences?from=${from}&to=${to}`,
+        token,
+      );
+      setAbsences(rows);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    }
+  }, [student, token, monthCursor]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function toggleAbsence() {
+    if (!selectedDate || !student) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Ayni gün+session absence varsa sil, yoksa ekle
+      const existing = absences.find((a) => a.date === selectedDate && a.session === selectedSession);
+      if (existing) {
+        await api.del(`/me/parent/students/${student.id}/absences/${existing.id}`, token);
+      } else {
+        await api.post(
+          `/me/parent/students/${student.id}/absences`,
+          { date: selectedDate, session: selectedSession },
+          token,
+        );
+      }
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Basit takvim: bu ayın günleri
+  const y = monthCursor.getFullYear();
+  const m = monthCursor.getMonth();
+  const firstDay = new Date(y, m, 1);
+  const lastDay = new Date(y, m + 1, 0);
+  const startWeekday = (firstDay.getDay() + 6) % 7; // Pazartesi=0
+  const daysInMonth = lastDay.getDate();
+  const cells: (number | null)[] = [];
+  for (let i = 0; i < startWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  function fmt(d: number): string {
+    return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  }
+
+  function absenceForDay(d: number): Absence[] {
+    const iso = fmt(d);
+    return absences.filter((a) => a.date === iso);
+  }
+
+  const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+  const weekLabels = ['Pt', 'Sa', 'Ça', 'Pe', 'Cu', 'Ct', 'Pa'];
+
+  return (
+    <Modal visible={!!student} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={cs.backdrop}>
+        <View style={cs.sheet}>
+          <View style={cs.grabber} />
+          <View style={cs.headerRow}>
+            <Text style={cs.title}>{student?.name} — Devamsızlık</Text>
+            <Pressable onPress={onClose} hitSlop={12}><Text style={cs.close}>✕</Text></Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            {error && <View style={cs.errBox}><Text style={cs.errText}>{error}</Text></View>}
+
+            <View style={cs.monthNav}>
+              <Pressable onPress={() => setMonthCursor(new Date(y, m - 1, 1))} hitSlop={8}>
+                <Text style={cs.navBtn}>‹</Text>
+              </Pressable>
+              <Text style={cs.monthTitle}>{monthNames[m]} {y}</Text>
+              <Pressable onPress={() => setMonthCursor(new Date(y, m + 1, 1))} hitSlop={8}>
+                <Text style={cs.navBtn}>›</Text>
+              </Pressable>
+            </View>
+
+            <View style={cs.weekRow}>
+              {weekLabels.map((w) => (
+                <Text key={w} style={cs.weekLabel}>{w}</Text>
+              ))}
+            </View>
+
+            <View style={cs.grid}>
+              {cells.map((c, i) => {
+                if (c === null) return <View key={i} style={cs.cell} />;
+                const iso = fmt(c);
+                const abs = absenceForDay(c);
+                const isSelected = selectedDate === iso;
+                return (
+                  <Pressable
+                    key={i}
+                    onPress={() => setSelectedDate(iso)}
+                    style={[
+                      cs.cell,
+                      cs.cellActive,
+                      isSelected && cs.cellSelected,
+                      abs.length > 0 && cs.cellAbsent,
+                    ]}
+                  >
+                    <Text style={[cs.cellText, abs.length > 0 && cs.cellTextAbsent]}>{c}</Text>
+                    {abs.length > 0 && (
+                      <View style={cs.dotRow}>
+                        {abs.some((a) => a.session === 'morning' || a.session === 'both') && <View style={[cs.dot, { backgroundColor: '#F59E0B' }]} />}
+                        {abs.some((a) => a.session === 'evening' || a.session === 'both') && <View style={[cs.dot, { backgroundColor: '#8B5CF6' }]} />}
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {selectedDate && (
+              <View style={cs.actionBox}>
+                <Text style={cs.actionLabel}>{formatDateTR(selectedDate)}</Text>
+                <View style={cs.sessionRow}>
+                  <Pressable
+                    onPress={() => setSelectedSession('morning')}
+                    style={[cs.sessBtn, selectedSession === 'morning' && cs.sessBtnActive]}
+                  >
+                    <Text style={cs.sessText}>☀️ Sabah</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setSelectedSession('evening')}
+                    style={[cs.sessBtn, selectedSession === 'evening' && cs.sessBtnActive]}
+                  >
+                    <Text style={cs.sessText}>🌇 Akşam</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setSelectedSession('both')}
+                    style={[cs.sessBtn, selectedSession === 'both' && cs.sessBtnActive]}
+                  >
+                    <Text style={cs.sessText}>Tam Gün</Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  onPress={toggleAbsence}
+                  disabled={loading}
+                  style={[cs.toggleBtn, loading && { opacity: 0.5 }]}
+                >
+                  <Text style={cs.toggleText}>
+                    {absences.some((a) => a.date === selectedDate && a.session === selectedSession)
+                      ? '✓ Kaldır (bu gün gelecek)'
+                      : 'Bugün Gelmeyecek olarak İşaretle'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+
+            <Text style={cs.hint}>
+              Servisçi, işaretlediğin günlerde bu öğrenciyi rota listesinde görmez.
+            </Text>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function formatDateTR(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+  return `${d} ${monthNames[m - 1]} ${y}`;
+}
+
+const cs = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
+  sheet: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '92%' },
+  grabber: { width: 40, height: 4, backgroundColor: colors.borderStrong, borderRadius: 2, alignSelf: 'center' as const, marginTop: 10 },
+  headerRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  title: { fontSize: 16, fontWeight: '800' as const, color: colors.dark, flex: 1 },
+  close: { fontSize: 20, color: colors.muted, fontWeight: '700' as const },
+  errBox: { padding: 10, backgroundColor: '#FEF2F2', borderRadius: 8, borderWidth: 1, borderColor: '#FECACA', marginBottom: 10 },
+  errText: { color: '#991B1B', fontSize: 12 },
+  monthNav: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: 8 },
+  navBtn: { fontSize: 24, color: colors.dark, paddingHorizontal: 16 },
+  monthTitle: { fontSize: 16, fontWeight: '800' as const, color: colors.dark },
+  weekRow: { flexDirection: 'row' as const, marginTop: 8, marginBottom: 4 },
+  weekLabel: { flex: 1, textAlign: 'center' as const, fontSize: 11, fontWeight: '700' as const, color: colors.muted },
+  grid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const },
+  cell: { width: `${100 / 7}%` as any, aspectRatio: 1, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 8 },
+  cellActive: { backgroundColor: colors.bg },
+  cellSelected: { borderWidth: 2, borderColor: colors.dark },
+  cellAbsent: { backgroundColor: '#FEF3C7' },
+  cellText: { fontSize: 14, fontWeight: '700' as const, color: colors.dark },
+  cellTextAbsent: { color: '#78350F' },
+  dotRow: { flexDirection: 'row' as const, gap: 3, marginTop: 3 },
+  dot: { width: 5, height: 5, borderRadius: 3 },
+  actionBox: { marginTop: 16, padding: 14, backgroundColor: colors.bg, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  actionLabel: { fontSize: 14, fontWeight: '800' as const, color: colors.dark, marginBottom: 10, textAlign: 'center' as const },
+  sessionRow: { flexDirection: 'row' as const, gap: 6, marginBottom: 10 },
+  sessBtn: { flex: 1, padding: 10, borderRadius: 8, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.border, alignItems: 'center' as const },
+  sessBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  sessText: { fontSize: 12, fontWeight: '700' as const, color: colors.dark },
+  toggleBtn: { padding: 12, backgroundColor: colors.dark, borderRadius: 10, alignItems: 'center' as const },
+  toggleText: { color: '#fff', fontSize: 13, fontWeight: '800' as const },
+  hint: { fontSize: 11, color: colors.muted, textAlign: 'center' as const, marginTop: 12, fontStyle: 'italic' as const },
+});
 
 function EditStudentModal({
   student,
@@ -495,6 +745,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   moreText: { fontSize: 20, color: colors.dark, fontWeight: '800', marginTop: -6 },
+  calBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.bg,
+    alignItems: 'center', justifyContent: 'center', marginRight: 4,
+  },
+  calText: { fontSize: 16 },
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
   emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 260 },

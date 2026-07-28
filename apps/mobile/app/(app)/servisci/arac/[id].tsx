@@ -12,13 +12,9 @@ import {
 } from 'react-native';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 import { api, ApiError } from '../../../../src/api/client';
-import { API_URL } from '../../../../src/api/config';
-import { uploadFile } from '../../../../src/api/upload';
 import { useAuth } from '../../../../src/state/auth';
-import { Button, ErrorBanner, InfoBanner, Input } from '../../../../src/components/ui';
-import { DateField } from '../../../../src/components/DateField';
+import { ErrorBanner, InfoBanner } from '../../../../src/components/ui';
 import { colors } from '../../../../src/theme/colors';
 
 interface Vehicle {
@@ -78,7 +74,6 @@ export default function AracDetayScreen() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [uploadFor, setUploadFor] = useState<DocRow | null>(null);
 
   const load = useCallback(async () => {
     if (!token || !id) return;
@@ -233,28 +228,24 @@ export default function AracDetayScreen() {
           )}
         </View>
 
-        <Text style={styles.sectionTitle}>Belgeler</Text>
-        {docs.map((row) => (
-          <DocumentCard key={row.definition.id} row={row} onUpload={() => setUploadFor(row)} />
-        ))}
-        {docs.length === 0 && (
-          <View style={styles.empty}>
-            <Text style={styles.emptySub}>Belge tanımı yok — admin ekibi tanımladığında burada listelenir.</Text>
+        <Pressable
+          onPress={() => router.push(`/(app)/servisci/arac/belgeler/${id}`)}
+          style={({ pressed }) => [styles.docsLink, pressed && { opacity: 0.7 }]}
+        >
+          <View style={styles.docsLinkIcon}>
+            <Text style={styles.docsLinkIconText}>📄</Text>
           </View>
-        )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.docsLinkTitle}>Araç Belgeleri</Text>
+            <Text style={styles.docsLinkSub}>
+              {docs.length > 0
+                ? `${docs.filter((d) => d.document?.status === 'approved').length} onaylı · ${docs.length} toplam`
+                : 'Sigorta, muayene, K belgesi vb. yükle'}
+            </Text>
+          </View>
+          <Text style={styles.docsLinkChev}>›</Text>
+        </Pressable>
       </ScrollView>
-
-      <UploadDocModal
-        row={uploadFor}
-        vehicleId={id ?? ''}
-        onClose={() => setUploadFor(null)}
-        onDone={async () => {
-          setUploadFor(null);
-          setNotice('Belge yüklendi, admin incelemesine sunuldu.');
-          setTimeout(() => setNotice(null), 3000);
-          await load();
-        }}
-      />
 
       <AddStudentModal
         visible={showAddStudent}
@@ -364,225 +355,14 @@ function AddStudentModal({
   );
 }
 
-function DocumentCard({ row, onUpload }: { row: DocRow; onUpload: () => void }) {
-  const doc = row.document;
-  const isApproved = doc?.status === 'approved';
-  const isRejected = doc?.status === 'rejected';
-  const isMissing = row.definition.required && !doc;
-
-  return (
-    <View
-      style={[
-        styles.docCard,
-        isApproved && styles.docCardApproved,
-        isRejected && styles.docCardRejected,
-        isMissing && styles.docCardMissing,
-      ]}
-    >
-      <View style={styles.docTop}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.docName}>
-            {row.definition.name}
-            {row.definition.required && <Text style={{ color: colors.danger }}> *</Text>}
-          </Text>
-          {row.definition.description && (
-            <Text style={styles.docDesc}>{row.definition.description}</Text>
-          )}
-        </View>
-        <StatusBadge doc={doc} required={row.definition.required} />
-      </View>
-
-      {doc && (
-        <View style={styles.docMeta}>
-          {doc.expiresAt && (
-            <Text style={styles.docExpiry}>
-              Bitiş: {new Date(doc.expiresAt).toLocaleDateString('tr-TR')}
-              {doc.expiryStatus === 'soon' && <Text style={{ color: colors.warning, fontWeight: '700' }}> · {doc.daysToExpiry} gün kaldı</Text>}
-              {doc.expiryStatus === 'expired' && <Text style={{ color: colors.danger, fontWeight: '700' }}> · süresi geçti</Text>}
-            </Text>
-          )}
-          {doc.status === 'rejected' && doc.rejectionReason && (
-            <View style={styles.rejectBox}>
-              <Text style={styles.rejectLabel}>Red gerekçesi:</Text>
-              <Text style={styles.rejectText}>{doc.rejectionReason}</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      {!isApproved && (
-        <Pressable onPress={onUpload} style={styles.uploadBtn}>
-          <Text style={styles.uploadBtnText}>{doc ? 'Yeniden Yükle' : 'Yükle'}</Text>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function StatusBadge({ doc, required }: { doc: DocRow['document']; required: boolean }) {
-  if (!doc) {
-    return (
-      <View style={[styles.badge, required ? styles.badgeMissing : styles.badgeOpt]}>
-        <Text style={[styles.badgeText, required ? styles.badgeTextMissing : styles.badgeTextOpt]}>
-          {required ? 'Eksik' : 'Opsiyonel'}
-        </Text>
-      </View>
-    );
-  }
-  const map = {
-    pending: { bg: '#FEF3C7', border: '#FDE68A', color: '#78350F', label: 'İncelemede' },
-    approved: { bg: colors.successSoft, border: '#A7F3D0', color: '#065F46', label: 'Onaylı' },
-    rejected: { bg: '#FEF2F2', border: '#FECACA', color: '#991B1B', label: 'Red' },
-  } as const;
-  const m = map[doc.status];
-  return (
-    <View style={[styles.badge, { backgroundColor: m.bg, borderColor: m.border }]}>
-      <Text style={[styles.badgeText, { color: m.color }]}>{m.label}</Text>
-    </View>
-  );
-}
-
-function UploadDocModal({
-  row,
-  vehicleId,
-  onClose,
-  onDone,
-}: {
-  row: DocRow | null;
-  vehicleId: string;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const { token } = useAuth();
-  const [uri, setUri] = useState<string | null>(null);
-  const [issuedAt, setIssuedAt] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const needsExpiry = row?.definition.requiresExpiry ?? false;
-
-  async function pick(mode: 'camera' | 'library') {
-    setError(null);
-    if (mode === 'camera') {
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) { setError('Kamera izni gerekli'); return; }
-      const r = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-      if (!r.canceled && r.assets[0]) setUri(r.assets[0].uri);
-    } else {
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) { setError('Galeri izni gerekli'); return; }
-      const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-      if (!r.canceled && r.assets[0]) setUri(r.assets[0].uri);
-    }
-  }
-
-  async function upload() {
-    if (!uri || !row) return;
-    if (needsExpiry && (!issuedAt || !expiresAt)) {
-      setError('Veriliş ve bitiş tarihi gerekli');
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const uploaded = await uploadFile(uri);
-      await api.post(
-        `/me/vehicles/${vehicleId}/documents/register`,
-        {
-          definitionId: row.definition.id,
-          fileUrl: uploaded.fileUrl,
-          originalName: uploaded.originalName,
-          issuedAt: issuedAt || undefined,
-          expiresAt: expiresAt || undefined,
-        },
-        token,
-      );
-      setUri(null); setIssuedAt(''); setExpiresAt('');
-      onDone();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <Modal visible={!!row} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={mstyles.backdrop}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <View style={mstyles.sheet}>
-            <View style={mstyles.grabber} />
-            <View style={mstyles.headerRow}>
-              <Text style={mstyles.title}>{row?.definition.name}</Text>
-              <Pressable onPress={onClose} hitSlop={12}><Text style={mstyles.close}>✕</Text></Pressable>
-            </View>
-            <ScrollView contentContainerStyle={mstyles.body} keyboardShouldPersistTaps="handled">
-              <ErrorBanner message={error} />
-
-              {!uri ? (
-                <View style={mstyles.pickerRow}>
-                  <Pressable style={mstyles.pickerBtn} onPress={() => pick('camera')}>
-                    <Text style={mstyles.pickerBtnEmoji}>📷</Text>
-                    <Text style={mstyles.pickerBtnText}>Kamera</Text>
-                  </Pressable>
-                  <Pressable style={mstyles.pickerBtn} onPress={() => pick('library')}>
-                    <Text style={mstyles.pickerBtnEmoji}>🖼️</Text>
-                    <Text style={mstyles.pickerBtnText}>Galeri</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={mstyles.previewBox}>
-                  <Text style={mstyles.previewText}>✓ Dosya seçildi</Text>
-                  <Pressable onPress={() => setUri(null)}><Text style={mstyles.previewClear}>Değiştir</Text></Pressable>
-                </View>
-              )}
-
-              {needsExpiry && (
-                <>
-                  <DateField label="Veriliş Tarihi" value={issuedAt} onChange={setIssuedAt} />
-                  <DateField label="Bitiş Tarihi" value={expiresAt} onChange={setExpiresAt} />
-                </>
-              )}
-
-              <Button
-                label={loading ? 'Yükleniyor...' : 'Yükle'}
-                onPress={upload}
-                loading={loading}
-                disabled={!uri}
-                style={{ marginTop: 12 }}
-              />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
-  );
-}
-
 const mstyles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
   sheet: { backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: '92%' },
-  grabber: { width: 40, height: 4, backgroundColor: colors.borderStrong, borderRadius: 2, alignSelf: 'center', marginTop: 10 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
-  title: { fontSize: 18, fontWeight: '800', color: colors.dark, flex: 1 },
-  close: { fontSize: 20, color: colors.muted, fontWeight: '700' },
+  grabber: { width: 40, height: 4, backgroundColor: colors.borderStrong, borderRadius: 2, alignSelf: 'center' as const, marginTop: 10 },
+  headerRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const, alignItems: 'center' as const, padding: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+  title: { fontSize: 18, fontWeight: '800' as const, color: colors.dark, flex: 1 },
+  close: { fontSize: 20, color: colors.muted, fontWeight: '700' as const },
   body: { padding: 20 },
-  pickerRow: { flexDirection: 'row', gap: 10 },
-  pickerBtn: {
-    flex: 1, padding: 20, backgroundColor: colors.card, borderRadius: 14,
-    borderWidth: 1, borderColor: colors.border,
-    alignItems: 'center', gap: 6,
-  },
-  pickerBtnEmoji: { fontSize: 32 },
-  pickerBtnText: { fontSize: 13, fontWeight: '700', color: colors.dark },
-  previewBox: {
-    padding: 20, backgroundColor: colors.successSoft, borderRadius: 12,
-    borderWidth: 1, borderColor: '#A7F3D0',
-    alignItems: 'center', gap: 8,
-  },
-  previewText: { fontSize: 14, fontWeight: '800', color: '#065F46' },
-  previewClear: { fontSize: 12, color: '#065F46', fontWeight: '700', textDecorationLine: 'underline' },
 });
 
 const styles = StyleSheet.create({
@@ -685,4 +465,19 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   arrowText: { fontSize: 14, color: colors.dark, fontWeight: '700' },
+  docsLink: {
+    marginTop: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 14, backgroundColor: colors.card, borderRadius: 14,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  docsLinkIcon: {
+    width: 44, height: 44, borderRadius: 12,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  docsLinkIconText: { fontSize: 20 },
+  docsLinkTitle: { fontSize: 14, fontWeight: '800', color: colors.dark },
+  docsLinkSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  docsLinkChev: { fontSize: 24, color: colors.muted, fontWeight: '400' },
 });

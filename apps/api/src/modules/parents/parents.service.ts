@@ -19,6 +19,7 @@ import {
   RequestStudent,
   School,
   StudentGuardian,
+  StudentAbsence,
 } from '@servis/db';
 import { OTP_PURPOSE, REQUEST_STATUS, PICKUP_TYPE } from '@servis/shared';
 import { OtpService } from '../otp/otp.service';
@@ -52,6 +53,8 @@ export class ParentsService {
     @InjectRepository(School) private readonly schools: Repository<School>,
     @InjectRepository(StudentGuardian)
     private readonly guardians: Repository<StudentGuardian>,
+    @InjectRepository(StudentAbsence)
+    private readonly absences: Repository<StudentAbsence>,
     private readonly otp: OtpService,
     private readonly jwt: JwtService,
     private readonly sms: SmsService,
@@ -717,6 +720,61 @@ export class ParentsService {
       throw new ForbiddenException('Bu velinin yetkisi yok');
     if (g.isPrimary) throw new BadRequestException('Ana veli kaldırılamaz');
     await this.guardians.remove(g);
+    return { ok: true };
+  }
+
+  // === Öğrenci devamsızlık (absence) ===
+  private async assertStudentAccess(parentId: string, studentId: string) {
+    const own = await this.students.findOne({ where: { id: studentId, parentId } });
+    if (own) return;
+    const g = await this.guardians.findOne({ where: { studentId, parentId } });
+    if (!g) throw new ForbiddenException('Bu öğrenciye erişim yok');
+  }
+
+  async listAbsences(parentId: string, studentId: string, from?: string, to?: string) {
+    await this.assertStudentAccess(parentId, studentId);
+    const qb = this.absences.createQueryBuilder('a')
+      .where('a.studentId = :sid', { sid: studentId });
+    if (from) qb.andWhere('a.date >= :from', { from });
+    if (to) qb.andWhere('a.date <= :to', { to });
+    qb.orderBy('a.date', 'ASC');
+    const rows = await qb.getMany();
+    return rows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      session: r.session,
+      reason: r.reason,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  async addAbsence(
+    parentId: string,
+    studentId: string,
+    input: { date: string; session: 'morning' | 'evening' | 'both'; reason?: string },
+  ) {
+    await this.assertStudentAccess(parentId, studentId);
+    // Idempotent: aynı gün + session zaten varsa döndür
+    const existing = await this.absences.findOne({
+      where: { studentId, date: input.date, session: input.session },
+    });
+    if (existing) return { id: existing.id };
+    const a = this.absences.create({
+      studentId,
+      date: input.date,
+      session: input.session,
+      reason: input.reason ?? null,
+      createdByParentId: parentId,
+    });
+    const saved = await this.absences.save(a);
+    return { id: saved.id };
+  }
+
+  async removeAbsence(parentId: string, studentId: string, absenceId: string) {
+    await this.assertStudentAccess(parentId, studentId);
+    const a = await this.absences.findOne({ where: { id: absenceId, studentId } });
+    if (!a) throw new NotFoundException('Devamsızlık bulunamadı');
+    await this.absences.remove(a);
     return { ok: true };
   }
 }

@@ -37,6 +37,7 @@ import { MobilePushToken } from './entities/mobile-push-token.entity';
 import { Trip, TripEnrollment } from './entities/trip.entity';
 import { EnabledCity } from './entities/enabled-city.entity';
 import { AdminActivityLog } from './entities/admin-activity-log.entity';
+import { StudentAbsence } from './entities/student-absence.entity';
 
 export const entities = [
   Parent,
@@ -72,6 +73,7 @@ export const entities = [
   TripEnrollment,
   EnabledCity,
   AdminActivityLog,
+  StudentAbsence,
 ];
 
 export const dataSourceOptions: DataSourceOptions = {

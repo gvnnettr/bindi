@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, IsNull, Repository } from 'typeorm';
-import { Trip, TripEnrollment, Enrollment, StudentGuardian, Offer } from '@servis/db';
+import { Trip, TripEnrollment, Enrollment, StudentGuardian, Offer, StudentAbsence } from '@servis/db';
 import { PushService } from '../push/push.service';
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -24,6 +24,8 @@ export class TripsService {
     @InjectRepository(Enrollment) private readonly enrollments: Repository<Enrollment>,
     @InjectRepository(StudentGuardian) private readonly guardians: Repository<StudentGuardian>,
     @InjectRepository(Offer) private readonly offers: Repository<Offer>,
+    @InjectRepository(StudentAbsence)
+    private readonly absences: Repository<StudentAbsence>,
     private readonly ds: DataSource,
     private readonly push: PushService,
   ) {}
@@ -95,6 +97,52 @@ export class TripsService {
     }
 
     return { id: trip.id, startedAt: trip.startedAt };
+  }
+
+  // Rotam ekranindan: arac sec, o araca atanmis aktif enrollmentlari otomatik al,
+  // bugun absence olan ogrencileri hariç tut, trip baslat.
+  async startByVehicle(
+    providerId: string,
+    input: { vehicleId: string; session: 'morning' | 'evening'; routeName?: string },
+  ) {
+    const existing = await this.trips.findOne({
+      where: { providerId, status: 'active' },
+    });
+    if (existing) {
+      throw new BadRequestException('Zaten aktif bir servis var. Önce mevcut olanı bitir.');
+    }
+
+    // Araca atanmis aktif enrollmentlar
+    const all = await this.enrollments.find({
+      where: { providerId, vehicleId: input.vehicleId, status: 'active' },
+      relations: ['student'],
+    });
+    if (all.length === 0) {
+      throw new BadRequestException('Bu araca atanmış aktif öğrenci yok.');
+    }
+
+    // Bugun icin absence olan ogrencileri hariç tut
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const studentIds = all.map((e) => e.student.id);
+    const todayAbsences = await this.absences.find({
+      where: { studentId: In(studentIds), date: today },
+    });
+    const absentSet = new Set<string>();
+    for (const a of todayAbsences) {
+      if (a.session === 'both' || a.session === input.session) {
+        absentSet.add(a.studentId);
+      }
+    }
+    const filtered = all.filter((e) => !absentSet.has(e.student.id));
+    if (filtered.length === 0) {
+      throw new BadRequestException('Bu araçtaki öğrencilerin hepsi bugün gelmeyecek olarak işaretli.');
+    }
+
+    return this.start(providerId, {
+      enrollmentIds: filtered.map((e) => e.id),
+      vehicleId: input.vehicleId,
+      routeName: input.routeName ?? (input.session === 'morning' ? 'Sabah' : 'Akşam'),
+    });
   }
 
   async updateLocation(providerId: string, tripId: string, lat: number, lng: number) {

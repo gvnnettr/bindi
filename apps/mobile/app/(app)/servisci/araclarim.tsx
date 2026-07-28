@@ -112,14 +112,21 @@ export default function AraclarimScreen() {
               <Text style={styles.meta}>{item.year} · {item.seats} kişilik</Text>
               <Text style={styles.plate}>{item.plate}</Text>
             </View>
-            <View style={styles.rightCol}>
-              <Pressable onPress={(e) => { e.stopPropagation?.(); setModal(item); }} hitSlop={8}>
-                <Text style={styles.editText}>Düzenle</Text>
-              </Pressable>
-              <Pressable onPress={(e) => { e.stopPropagation?.(); remove(item); }} hitSlop={8}>
-                <Text style={styles.remove}>Sil</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation?.();
+                Alert.alert(`${item.brand} ${item.model}`, item.plate, [
+                  { text: 'Düzenle', onPress: () => setModal(item) },
+                  { text: '📄 Belgeler', onPress: () => router.push(`/(app)/servisci/arac/${item.id}/belgeler`) },
+                  { text: 'Sil', style: 'destructive', onPress: () => remove(item) },
+                  { text: 'Vazgeç', style: 'cancel' },
+                ]);
+              }}
+              hitSlop={8}
+              style={styles.moreBtn}
+            >
+              <Text style={styles.moreText}>⋯</Text>
+            </Pressable>
           </Pressable>
         )}
       />
@@ -275,10 +282,12 @@ const styles = StyleSheet.create({
     fontSize: 12, fontWeight: '700', color: colors.dark,
     marginTop: 4, fontFamily: Platform.select({ ios: 'Courier', android: 'monospace' }),
   },
-  rightCol: { alignItems: 'flex-end', gap: 6 },
-  editText: { fontSize: 10, color: colors.blue, fontWeight: '700', padding: 4 },
-  chev: { fontSize: 22, color: colors.muted },
-  remove: { fontSize: 10, color: colors.danger, fontWeight: '700', padding: 4 },
+  moreBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: colors.bg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  moreText: { fontSize: 20, color: colors.dark, fontWeight: '800', marginTop: -6 },
   empty: { padding: 40, alignItems: 'center' },
   emptyTitle: { fontSize: 15, fontWeight: '800', color: colors.dark },
   emptySub: { fontSize: 12, color: colors.muted, textAlign: 'center', marginTop: 6, lineHeight: 18, maxWidth: 280 },

@@ -417,12 +417,38 @@ function OfferModal({
             <ScrollView contentContainerStyle={modalStyles.body}>
               <ErrorBanner message={error} />
 
+              {/* TALEP OZETI - her zaman goster */}
+              {distanceKm != null && (
+                <View style={statsStyles.summaryCard}>
+                  <View style={statsStyles.summaryItem}>
+                    <Text style={statsStyles.summaryLabel}>MESAFE</Text>
+                    <Text style={statsStyles.summaryValue}>{distanceKm.toFixed(1)} km</Text>
+                  </View>
+                  <View style={statsStyles.summaryDivider} />
+                  <View style={statsStyles.summaryItem}>
+                    <Text style={statsStyles.summaryLabel}>TAHMİNİ SÜRE</Text>
+                    <Text style={statsStyles.summaryValue}>~{Math.max(1, Math.round(distanceKm * 2))} dk</Text>
+                  </View>
+                </View>
+              )}
+
               {minMonthly > 0 && (
                 <View style={statsStyles.minPriceCard}>
                   <Text style={statsStyles.minPriceLabel}>MİNİMUM AYLIK ÜCRET</Text>
                   <Text style={statsStyles.minPriceValue}>{minMonthly.toLocaleString('tr-TR')} ₺</Text>
                   <Text style={statsStyles.minPriceHint}>
                     {effectiveKm} km × {minPricePerKm.toLocaleString('tr-TR')} ₺/km (admin kuralı) — bu tutarın altında teklif kabul edilmez.
+                  </Text>
+                </View>
+              )}
+
+              {/* Rakip yoksa da bir kart göster (İlk teklif sensin) */}
+              {(!stats || stats.count === 0) && (
+                <View style={statsStyles.firstOfferCard}>
+                  <Text style={statsStyles.firstOfferEmoji}>🎯</Text>
+                  <Text style={statsStyles.firstOfferTitle}>İlk teklif sensin</Text>
+                  <Text style={statsStyles.firstOfferHint}>
+                    Bu talebe henüz teklif verilmedi. Rekabet kurallarına dikkat ederek fiyat belirle.
                   </Text>
                 </View>
               )}
@@ -849,4 +875,28 @@ const statsStyles = StyleSheet.create({
     textAlign: 'center' as const,
     lineHeight: 16,
   },
+  summaryCard: {
+    flexDirection: 'row' as const,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    alignItems: 'center' as const,
+  },
+  summaryItem: { flex: 1, alignItems: 'center' as const },
+  summaryLabel: { fontSize: 10, fontWeight: '800' as const, color: colors.muted, letterSpacing: 0.5 },
+  summaryValue: { fontSize: 18, fontWeight: '800' as const, color: colors.dark, marginTop: 4 },
+  summaryDivider: { width: 1, height: 30, backgroundColor: colors.borderStrong },
+  firstOfferCard: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    alignItems: 'center' as const,
+  },
+  firstOfferEmoji: { fontSize: 32, marginBottom: 4 },
+  firstOfferTitle: { fontSize: 14, fontWeight: '800' as const, color: '#1E3A8A', marginBottom: 4 },
+  firstOfferHint: { fontSize: 11, color: '#1E40AF', textAlign: 'center' as const, lineHeight: 16 },
 });

@@ -29,6 +29,12 @@ class StartTripDto {
   @IsOptional() @IsString() @Length(1, 120) routeName?: string;
 }
 
+class StartByVehicleDto {
+  @IsString() vehicleId!: string;
+  @IsIn(['morning', 'evening']) session!: 'morning' | 'evening';
+  @IsOptional() @IsString() @Length(1, 120) routeName?: string;
+}
+
 class LocationDto {
   @IsLatitude() lat!: number;
   @IsLongitude() lng!: number;
@@ -58,6 +64,11 @@ export class ProviderTripsController {
   @Post('start')
   start(@Req() req: ProviderRequest, @Body() dto: StartTripDto) {
     return this.svc.start(req.provider.id, dto);
+  }
+
+  @Post('start-vehicle')
+  startByVehicle(@Req() req: ProviderRequest, @Body() dto: StartByVehicleDto) {
+    return this.svc.startByVehicle(req.provider.id, dto);
   }
 
   @Get('active')

@@ -12,6 +12,7 @@ import {
   RequestStudent,
   School,
   StudentGuardian,
+  StudentAbsence,
 } from '@servis/db';
 import { OtpModule } from '../otp/otp.module';
 import { RequestsModule } from '../requests/requests.module';
@@ -32,6 +33,7 @@ import { ParentJwtGuard } from './parent-jwt.guard';
       RequestStudent,
       School,
       StudentGuardian,
+      StudentAbsence,
     ]),
     OtpModule,
     RequestsModule,

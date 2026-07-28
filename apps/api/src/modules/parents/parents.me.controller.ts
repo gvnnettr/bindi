@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -75,6 +76,12 @@ class InviteGuardianDto {
 class UpdateGuardianDto {
   @IsOptional() @IsString() @Length(1, 120) name?: string;
   @IsOptional() @IsIn(GUARDIAN_RELATIONS as any) relation?: string;
+}
+
+class AbsenceDto {
+  @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'date YYYY-MM-DD olmalı' }) date!: string;
+  @IsIn(['morning', 'evening', 'both']) session!: 'morning' | 'evening' | 'both';
+  @IsOptional() @IsString() @Length(0, 500) reason?: string;
 }
 
 @UseGuards(ParentJwtGuard)
@@ -171,6 +178,35 @@ export class ParentsMeController {
   @Delete('students/:id')
   removeStudent(@Req() req: ParentRequest, @Param('id') id: string) {
     return this.svc.removeStudent(req.parent.id, id);
+  }
+
+  // Öğrenci devamsızlık
+  @Get('students/:id/absences')
+  listAbsences(
+    @Req() req: ParentRequest,
+    @Param('id') id: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.svc.listAbsences(req.parent.id, id, from, to);
+  }
+
+  @Post('students/:id/absences')
+  addAbsence(
+    @Req() req: ParentRequest,
+    @Param('id') id: string,
+    @Body() dto: AbsenceDto,
+  ) {
+    return this.svc.addAbsence(req.parent.id, id, dto);
+  }
+
+  @Delete('students/:id/absences/:absenceId')
+  removeAbsence(
+    @Req() req: ParentRequest,
+    @Param('id') id: string,
+    @Param('absenceId') absenceId: string,
+  ) {
+    return this.svc.removeAbsence(req.parent.id, id, absenceId);
   }
 
   // Guardians (aile üyeleri)
