@@ -83,3 +83,67 @@ workflows:
         submit_to_testflight: true
         beta_groups:
           - Internal Testers
+
+  android-play-internal:
+    name: Bindi Android Play Internal
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        - firebase        # Codemagic UI: GOOGLE_SERVICES_JSON_B64 vb.
+      vars:
+        PACKAGE_NAME: "com.gvn.bindi"
+      node: 20.11.0
+      java: 17
+      android_signing:
+        - bindi_upload_keystore   # Codemagic Signing Identities'e yüklenecek
+    integrations:
+      google_play: bindi-play-service-account   # Codemagic Integrations'a eklenecek
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install pnpm
+        script: |
+          npm install -g pnpm@9 --force
+      - name: Install workspace dependencies
+        script: |
+          pnpm install --frozen-lockfile
+      - name: Restore Firebase configs
+        working_directory: apps/mobile
+        script: |
+          echo "$GOOGLE_SERVICE_INFO_PLIST_B64" | base64 --decode > GoogleService-Info.plist
+          echo "$GOOGLE_SERVICES_JSON_B64" | base64 --decode > google-services.json
+      - name: Expo prebuild
+        working_directory: apps/mobile
+        script: |
+          npx expo prebuild --platform android --clean --no-install
+      - name: Set version code (monotonik epoch)
+        working_directory: apps/mobile/android
+        script: |
+          # Unix epoch - 1600000000 = 9 haneli monotonik integer (int32 icin guvenli)
+          VC=$(($(date +%s) - 1600000000))
+          sed -i.bak "s/versionCode [0-9]*/versionCode $VC/g" app/build.gradle
+          rm -f app/build.gradle.bak
+          echo "Set versionCode=$VC"
+      - name: Build AAB (release)
+        working_directory: apps/mobile/android
+        script: |
+          ./gradlew bundleRelease
+    artifacts:
+      - apps/mobile/android/app/build/outputs/**/*.aab
+      - apps/mobile/android/app/build/outputs/**/mapping.txt
+    publishing:
+      email:
+        recipients:
+          - guvenlevent@gmail.com
+        notify:
+          success: true
+          failure: true
+      google_play:
+        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT
+        track: internal
+        submit_as_draft: false
