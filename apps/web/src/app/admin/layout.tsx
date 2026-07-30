@@ -1,19 +1,21 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { adminSession } from '@/lib/session';
 import { AppShell, Icons, NavItem } from '@/components/AppShell';
 import { NotificationBell } from '@/components/NotificationBell';
 import { PushEnable } from '@/components/PushEnable';
 
 const publicPaths = ['/admin/giris'];
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 dakika hareketsizlik
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const isPublic = publicPaths.includes(pathname);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!isPublic && !adminSession.get()) {
@@ -22,6 +24,36 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       setReady(true);
     }
   }, [pathname, isPublic, router]);
+
+  // API 401/403 dinle -> oturum bittiginde login'e at
+  useEffect(() => {
+    if (isPublic) return;
+    function onUnauthorized() {
+      adminSession.clear();
+      router.replace('/admin/giris?expired=1');
+    }
+    window.addEventListener('api:unauthorized', onUnauthorized);
+    return () => window.removeEventListener('api:unauthorized', onUnauthorized);
+  }, [isPublic, router]);
+
+  // Idle timeout: 30 dk hareketsizlik sonrasi otomatik cikis
+  useEffect(() => {
+    if (isPublic || !ready) return;
+    function reset() {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      idleTimerRef.current = setTimeout(() => {
+        adminSession.clear();
+        router.replace('/admin/giris?expired=1');
+      }, IDLE_TIMEOUT_MS);
+    }
+    const events: (keyof WindowEventMap)[] = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    for (const ev of events) window.addEventListener(ev, reset);
+    reset();
+    return () => {
+      for (const ev of events) window.removeEventListener(ev, reset);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [isPublic, ready, router]);
 
   if (isPublic) return <>{children}</>;
   if (!ready) return null;

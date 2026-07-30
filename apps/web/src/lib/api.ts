@@ -27,6 +27,11 @@ export async function apiFetch<T>(
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
   if (!res.ok) {
+    // 401 / 403 -> oturum bitti/gecersiz olarak degerlendir
+    // Layout'ta dinlenip login'e yonlendirilir
+    if ((res.status === 401 || res.status === 403) && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('api:unauthorized', { detail: { status: res.status, path } }));
+    }
     const err = new Error(
       (data as { message?: string })?.message ?? `HTTP ${res.status}`,
     ) as ApiError;
