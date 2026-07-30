@@ -84,8 +84,8 @@ workflows:
         beta_groups:
           - Internal Testers
 
-  android-play-internal:
-    name: Bindi Android Play Internal
+  android-apk:
+    name: Bindi Android APK
     max_build_duration: 60
     instance_type: mac_mini_m2
     environment:
@@ -96,9 +96,7 @@ workflows:
       node: 20.11.0
       java: 17
       android_signing:
-        - bindi_upload_keystore   # Codemagic Signing Identities'e yüklenecek
-    integrations:
-      google_play: bindi-play-service-account   # Codemagic Integrations'a eklenecek
+        - bindi_upload_keystore   # Codemagic Signing Identities'e yüklenecek (keystore uret)
     triggering:
       events:
         - push
@@ -129,12 +127,12 @@ workflows:
           sed -i.bak "s/versionCode [0-9]*/versionCode $VC/g" app/build.gradle
           rm -f app/build.gradle.bak
           echo "Set versionCode=$VC"
-      - name: Build AAB (release)
+      - name: Build APK (release, signed)
         working_directory: apps/mobile/android
         script: |
-          ./gradlew bundleRelease
+          ./gradlew assembleRelease
     artifacts:
-      - apps/mobile/android/app/build/outputs/**/*.aab
+      - apps/mobile/android/app/build/outputs/apk/release/*.apk
       - apps/mobile/android/app/build/outputs/**/mapping.txt
     publishing:
       email:
@@ -143,7 +141,3 @@ workflows:
         notify:
           success: true
           failure: true
-      google_play:
-        credentials: $GOOGLE_PLAY_SERVICE_ACCOUNT
-        track: internal
-        submit_as_draft: false
