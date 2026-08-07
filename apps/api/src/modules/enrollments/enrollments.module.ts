@@ -11,6 +11,7 @@ import {
   ProviderSubscription,
   Parent,
   Provider,
+  StudentAbsence,
 } from '@servis/db';
 import { EnrollmentsService } from './enrollments.service';
 import { PaymentReminderService } from './payment-reminder.service';
@@ -34,6 +35,7 @@ import { SmsModule } from '../sms/sms.module';
       ProviderSubscription,
       Parent,
       Provider,
+      StudentAbsence,
     ]),
     JwtModule.registerAsync({
       inject: [ConfigService],

@@ -44,6 +44,9 @@ interface Enrollment {
   student: { id: string; name: string; class: string | null; school: { id: string; name: string } | null };
   parent: { id: string; name: string; phone: string };
   vehicle: { id: string; brand: string; model: string; plate: string } | null;
+  vehicleId?: string | null;
+  // Backend eklendiğinde veli tarafından "bugün gelmeyecek" işareti gelir
+  absentToday?: boolean;
 }
 
 function timeSince(iso: string | null): string {
@@ -266,8 +269,8 @@ function StartTripModal({ visible, onClose, onDone }: { visible: boolean; onClos
   const { token } = useAuth();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [selectedEnrollments, setSelectedEnrollments] = useState<string[]>([]);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [absentIds, setAbsentIds] = useState<Set<string>>(new Set());
   const [routeName, setRouteName] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(false);
@@ -282,16 +285,60 @@ function StartTripModal({ visible, onClose, onDone }: { visible: boolean; onClos
       api.get<Vehicle[]>('/me/vehicles', token).catch(() => [] as Vehicle[]),
     ])
       .then(([es, vs]) => {
-        setEnrollments(es.filter((e: any) => e.status !== 'ended'));
+        const active = es.filter((e: any) => e.status !== 'ended');
+        setEnrollments(active);
         setVehicles(vs);
+        // Tek araç varsa otomatik seç
+        if (vs.length === 1) setVehicleId(vs[0].id);
+        // Veli tarafından "bugün gelmeyecek" işaretlenenleri absentIds'e al
+        setAbsentIds(new Set(active.filter((e) => e.absentToday).map((e) => e.id)));
       })
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoadingData(false));
   }, [visible, token]);
 
+  // Seçili araca ait öğrenciler
+  const vehicleEnrollments = vehicleId
+    ? enrollments.filter((e) => (e.vehicleId ?? e.vehicle?.id) === vehicleId)
+    : [];
+
+  // Servisi başlatan enrollmentlar = seçili araç öğrencileri - gelmeyenler
+  const activeEnrollments = vehicleEnrollments.filter((e) => !absentIds.has(e.id));
+
+  async function toggleAbsent(enrollmentId: string) {
+    const wasAbsent = absentIds.has(enrollmentId);
+    // Optimistic UI — hemen değiştir, hata olursa geri al
+    setAbsentIds((prev) => {
+      const next = new Set(prev);
+      if (wasAbsent) next.delete(enrollmentId);
+      else next.add(enrollmentId);
+      return next;
+    });
+    try {
+      if (wasAbsent) {
+        await api.del(`/me/enrollments/${enrollmentId}/absent-today`, token);
+      } else {
+        await api.post(`/me/enrollments/${enrollmentId}/absent-today`, {}, token);
+      }
+    } catch (e) {
+      // Rollback
+      setAbsentIds((prev) => {
+        const next = new Set(prev);
+        if (wasAbsent) next.add(enrollmentId);
+        else next.delete(enrollmentId);
+        return next;
+      });
+      Alert.alert('İşaretleme yapılamadı', e instanceof ApiError ? e.message : (e as Error).message);
+    }
+  }
+
   async function submit() {
-    if (selectedEnrollments.length === 0) {
-      setError('En az bir öğrenci seç');
+    if (!vehicleId) {
+      setError('Servisi hangi araçla başlatacağını seç');
+      return;
+    }
+    if (activeEnrollments.length === 0) {
+      setError('En az bir öğrenci aktif olmalı — hepsi "gelmeyecek" işaretli');
       return;
     }
     setLoading(true);
@@ -300,14 +347,14 @@ function StartTripModal({ visible, onClose, onDone }: { visible: boolean; onClos
       await api.post(
         '/me/trips/start',
         {
-          enrollmentIds: selectedEnrollments,
-          vehicleId: vehicleId ?? undefined,
+          enrollmentIds: activeEnrollments.map((e) => e.id),
+          vehicleId,
           routeName: routeName.trim() || undefined,
         },
         token,
       );
-      setSelectedEnrollments([]);
-      setVehicleId(null);
+      setVehicleId(vehicles.length === 1 ? vehicles[0].id : null);
+      setAbsentIds(new Set());
       setRouteName('');
       onDone();
     } catch (e) {
@@ -334,45 +381,18 @@ function StartTripModal({ visible, onClose, onDone }: { visible: boolean; onClos
                 <ActivityIndicator color={colors.muted} style={{ marginTop: 40 }} />
               ) : (
                 <>
-                  <Text style={ms.sectionLabel}>Bu Servisteki Öğrenciler</Text>
-                  {enrollments.length === 0 ? (
-                    <Text style={ms.hint}>Aktif öğrenci kaydın yok. Talep kabul edip Takip Paketi'yle enrollment oluştur.</Text>
-                  ) : (
-                    <View style={ms.list}>
-                      {enrollments.map((e) => {
-                        const active = selectedEnrollments.includes(e.id);
-                        return (
-                          <Pressable
-                            key={e.id}
-                            onPress={() => setSelectedEnrollments((p) => active ? p.filter((x) => x !== e.id) : [...p, e.id])}
-                            style={[ms.enrCard, active && ms.enrCardActive]}
-                          >
-                            <View style={[ms.check, active && ms.checkActive]}>
-                              {active && <Text style={ms.checkMark}>✓</Text>}
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={ms.enrName}>{e.student.name}</Text>
-                              <Text style={ms.enrMeta}>
-                                {e.student.class ?? '—'}
-                                {e.student.school ? ` · ${e.student.school.name}` : ''}
-                              </Text>
-                            </View>
-                          </Pressable>
-                        );
-                      })}
+                  {/* 1. ARAÇ (zorunlu, önce seçilir) */}
+                  {vehicles.length === 0 ? (
+                    <View style={ms.warnBox}>
+                      <Text style={ms.warnTitle}>⚠️ Aracın yok</Text>
+                      <Text style={ms.warnHint}>
+                        Servis başlatabilmek için önce Araçlarım'dan bir araç eklemelisin.
+                      </Text>
                     </View>
-                  )}
-
-                  {vehicles.length > 0 && (
+                  ) : (
                     <>
-                      <Text style={ms.sectionLabel}>Araç</Text>
+                      <Text style={ms.sectionLabel}>1. Araç · Zorunlu</Text>
                       <View style={ms.chipRow}>
-                        <Pressable
-                          onPress={() => setVehicleId(null)}
-                          style={[ms.chip, vehicleId === null && ms.chipActive]}
-                        >
-                          <Text style={[ms.chipText, vehicleId === null && ms.chipTextActive]}>Belirtme</Text>
-                        </Pressable>
                         {vehicles.map((v) => (
                           <Pressable
                             key={v.id}
@@ -388,22 +408,80 @@ function StartTripModal({ visible, onClose, onDone }: { visible: boolean; onClos
                     </>
                   )}
 
-                  <Input
-                    label="Sefer Adı (opsiyonel)"
-                    value={routeName}
-                    onChangeText={setRouteName}
-                    placeholder="Sabah - Merkez"
-                    hint="Kolay hatırlaman için"
-                  />
+                  {/* 2. ÖĞRENCİLER (seçili araca göre otomatik listelenir) */}
+                  {vehicleId && (
+                    <>
+                      <Text style={ms.sectionLabel}>
+                        2. Bu Servisteki Öğrenciler · {activeEnrollments.length}
+                        {absentIds.size > 0 ? ` (+${absentIds.size} gelmeyecek)` : ''}
+                      </Text>
+                      {vehicleEnrollments.length === 0 ? (
+                        <View style={ms.warnBox}>
+                          <Text style={ms.warnTitle}>Bu araca kayıtlı öğrenci yok</Text>
+                          <Text style={ms.warnHint}>
+                            Kazandığın işleri Öğrencilerim'den bu araca ata, sonra buradan servis başlat.
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={ms.list}>
+                          {vehicleEnrollments.map((e) => {
+                            const isAbsent = absentIds.has(e.id);
+                            return (
+                              <View
+                                key={e.id}
+                                style={[ms.enrCard, isAbsent && ms.enrCardAbsent]}
+                              >
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[ms.enrName, isAbsent && ms.enrNameAbsent]}>
+                                    {e.student.name}
+                                  </Text>
+                                  <Text style={[ms.enrMeta, isAbsent && ms.enrMetaAbsent]}>
+                                    {e.student.class ?? '—'}
+                                    {e.student.school ? ` · ${e.student.school.name}` : ''}
+                                    {isAbsent && e.absentToday && ' · Veli işaretledi'}
+                                    {isAbsent && !e.absentToday && ' · Sen işaretledin'}
+                                  </Text>
+                                </View>
+                                <Pressable
+                                  onPress={() => toggleAbsent(e.id)}
+                                  style={[ms.absentBtn, isAbsent && ms.absentBtnActive]}
+                                >
+                                  <Text style={[ms.absentBtnText, isAbsent && ms.absentBtnTextActive]}>
+                                    {isAbsent ? '↺ Geri al' : 'Bugün gelmeyecek'}
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
 
-                  <Button
-                    label={loading ? 'Başlatılıyor...' : 'Servisi Başlat'}
-                    onPress={submit}
-                    loading={loading}
-                    disabled={selectedEnrollments.length === 0}
-                    style={{ marginTop: 12 }}
-                  />
-                  <Text style={ms.hint}>Servis başlar başlamaz velilere bildirim gider, konumun paylaşılır.</Text>
+                      <Text style={ms.absentHint}>
+                        💡 Gelmeyecek öğrencilerin velilerine "servis başladı" bildirimi gitmez, listede pasif görünürler.
+                      </Text>
+                    </>
+                  )}
+
+                  {vehicleId && vehicleEnrollments.length > 0 && (
+                    <>
+                      <Input
+                        label="Sefer Adı (opsiyonel)"
+                        value={routeName}
+                        onChangeText={setRouteName}
+                        placeholder="Sabah - Merkez"
+                        hint="Kolay hatırlaman için"
+                      />
+
+                      <Button
+                        label={loading ? 'Başlatılıyor...' : `Servisi Başlat · ${activeEnrollments.length} öğrenci`}
+                        onPress={submit}
+                        loading={loading}
+                        disabled={activeEnrollments.length === 0}
+                        style={{ marginTop: 12 }}
+                      />
+                      <Text style={ms.hint}>Servis başlar başlamaz aktif velilere bildirim gider, konumun paylaşılır.</Text>
+                    </>
+                  )}
                 </>
               )}
             </ScrollView>
@@ -430,6 +508,12 @@ const ms = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   enrCardActive: { backgroundColor: colors.primarySoft, borderColor: colors.primary },
+  enrCardAbsent: {
+    backgroundColor: colors.bg,
+    borderColor: colors.borderStrong,
+    borderStyle: 'dashed',
+    opacity: 0.85,
+  },
   check: {
     width: 22, height: 22, borderRadius: 6,
     borderWidth: 2, borderColor: colors.borderStrong,
@@ -438,7 +522,45 @@ const ms = StyleSheet.create({
   checkActive: { backgroundColor: colors.dark, borderColor: colors.dark },
   checkMark: { color: '#fff', fontWeight: '800', fontSize: 12 },
   enrName: { fontSize: 13, fontWeight: '700', color: colors.dark },
+  enrNameAbsent: {
+    color: colors.muted,
+    textDecorationLine: 'line-through',
+    textDecorationColor: colors.muted,
+  },
   enrMeta: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  enrMetaAbsent: { color: colors.muted, fontStyle: 'italic' },
+  absentBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: '#fff',
+  },
+  absentBtnActive: {
+    backgroundColor: colors.warning,
+    borderColor: colors.warning,
+  },
+  absentBtnText: { fontSize: 11, fontWeight: '700', color: colors.muted },
+  absentBtnTextActive: { color: '#fff', fontWeight: '800' },
+  absentHint: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 8,
+    marginBottom: 8,
+    fontStyle: 'italic',
+    lineHeight: 16,
+  },
+  warnBox: {
+    padding: 14,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    marginBottom: 12,
+  },
+  warnTitle: { fontSize: 13, fontWeight: '800', color: '#78350F' },
+  warnHint: { fontSize: 11, color: '#78350F', marginTop: 4, lineHeight: 16 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 },
   chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },

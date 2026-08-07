@@ -14,6 +14,7 @@ import {
   ServiceRequest,
   RequestStudent,
   ProviderSubscription,
+  StudentAbsence,
 } from '@servis/db';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SmsService } from '../sms/sms.service';
@@ -34,6 +35,8 @@ export class EnrollmentsService {
     private readonly reqStudents: Repository<RequestStudent>,
     @InjectRepository(ProviderSubscription)
     private readonly subs: Repository<ProviderSubscription>,
+    @InjectRepository(StudentAbsence)
+    private readonly absences: Repository<StudentAbsence>,
     private readonly notif: NotificationsService,
     private readonly sms: SmsService,
   ) {}
@@ -124,6 +127,15 @@ export class EnrollmentsService {
       relations: ['student', 'student.school', 'parent', 'vehicle'],
       order: { createdAt: 'DESC' },
     });
+
+    // Bugünkü absence'ları toplu çek — mobile "üstü çizik pasif" göstermek için
+    const today = new Date().toISOString().slice(0, 10);
+    const studentIds = rows.map((r) => r.student.id);
+    const todayAbsences = studentIds.length > 0
+      ? await this.absences.find({ where: { studentId: In(studentIds), date: today } })
+      : [];
+    const absentStudentIds = new Set(todayAbsences.map((a) => a.studentId));
+
     return rows.map((e) => ({
       id: e.id,
       status: e.status,
@@ -132,6 +144,8 @@ export class EnrollmentsService {
       monthlyPrice: Number(e.monthlyPrice),
       note: e.note,
       createdAt: e.createdAt,
+      vehicleId: e.vehicleId ?? null,
+      absentToday: absentStudentIds.has(e.student.id),
       student: {
         id: e.student.id,
         name: e.student.name,
@@ -155,6 +169,52 @@ export class EnrollmentsService {
           }
         : null,
     }));
+  }
+
+  // Servisçi bir öğrencinin bugünkü seferini "gelmeyecek" işaretler (o an gelmedi/yakında gelmeyecek)
+  // Idempotent: aynı gün + session için tek kayıt tutar.
+  async markEnrollmentAbsentToday(
+    providerId: string,
+    enrollmentId: string,
+    session: 'morning' | 'evening' | 'both' = 'both',
+    reason?: string,
+  ) {
+    const e = await this.enrollments.findOne({
+      where: { id: enrollmentId, providerId },
+      relations: ['student'],
+    });
+    if (!e) throw new NotFoundException('Kayıt bulunamadı');
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await this.absences.findOne({
+      where: { studentId: e.student.id, date: today, session },
+    });
+    if (existing) return { id: existing.id, alreadyMarked: true };
+    const a = this.absences.create({
+      studentId: e.student.id,
+      date: today,
+      session,
+      reason: reason ?? 'Servisçi işaretledi',
+      createdByParentId: null,
+    });
+    const saved = await this.absences.save(a);
+    return { id: saved.id, alreadyMarked: false };
+  }
+
+  // Servisçi işaretini geri al — bugünkü tüm absence kayıtlarını sil (servisçi + veli hepsi)
+  async unmarkEnrollmentAbsentToday(providerId: string, enrollmentId: string) {
+    const e = await this.enrollments.findOne({
+      where: { id: enrollmentId, providerId },
+      relations: ['student'],
+    });
+    if (!e) throw new NotFoundException('Kayıt bulunamadı');
+    const today = new Date().toISOString().slice(0, 10);
+    const existing = await this.absences.find({
+      where: { studentId: e.student.id, date: today },
+    });
+    if (existing.length > 0) {
+      await this.absences.remove(existing);
+    }
+    return { ok: true, removed: existing.length };
   }
 
   async detail(providerId: string, id: string) {

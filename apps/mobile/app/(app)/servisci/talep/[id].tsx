@@ -372,6 +372,10 @@ function OfferModal({
   const belowMin = minMonthly > 0 && priceNumber > 0 && priceNumber < minMonthly;
 
   async function submit() {
+    if (vehicles.length > 0 && !vehicleId) {
+      setError('Araç seç — bu talebe hangi araçla hizmet vereceğini belirt');
+      return;
+    }
     if (!price || Number(price) < 100) {
       setError('Geçerli bir aylık ücret gir (min ₺100)');
       return;
@@ -442,14 +446,25 @@ function OfferModal({
                 </View>
               )}
 
-              {/* Rakip yoksa da bir kart göster (İlk teklif sensin) */}
+              {/* Rakip yoksa: km bazlı önerilen aralığı göster */}
               {(!stats || stats.count === 0) && (
                 <View style={statsStyles.firstOfferCard}>
                   <Text style={statsStyles.firstOfferEmoji}>🎯</Text>
                   <Text style={statsStyles.firstOfferTitle}>İlk teklif sensin</Text>
                   <Text style={statsStyles.firstOfferHint}>
-                    Bu talebe henüz teklif verilmedi. Rekabet kurallarına dikkat ederek fiyat belirle.
+                    Bu talebe henüz kimse teklif vermedi. Fiyatı sen belirliyorsun.
                   </Text>
+                  {minMonthly > 0 && (
+                    <View style={statsStyles.suggestBox}>
+                      <Text style={statsStyles.suggestLabel}>Mesafeye göre öneri</Text>
+                      <Text style={statsStyles.suggestRange}>
+                        {(minMonthly * 2).toLocaleString('tr-TR')} – {(minMonthly * 3).toLocaleString('tr-TR')} ₺/ay
+                      </Text>
+                      <Text style={statsStyles.suggestHint}>
+                        {effectiveKm} km × {minPricePerKm.toLocaleString('tr-TR')} ₺/km taban ({minMonthly.toLocaleString('tr-TR')} ₺). Rakip yokken 2-3 kat aralığı standart.
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -500,18 +515,17 @@ function OfferModal({
                 }
               />
 
-              {vehicles.length > 0 && (
+              {vehicles.length === 0 ? (
+                <View style={modalStyles.vehicleWarn}>
+                  <Text style={modalStyles.vehicleWarnTitle}>⚠️ Aracın yok</Text>
+                  <Text style={modalStyles.vehicleWarnHint}>
+                    Teklif verebilmek için önce Araçlarım'dan bir araç eklemelisin.
+                  </Text>
+                </View>
+              ) : (
                 <>
-                  <Text style={modalStyles.subLabel}>Araç seç (opsiyonel)</Text>
+                  <Text style={modalStyles.subLabel}>Araç Seç · Zorunlu</Text>
                   <View style={modalStyles.vehicleGrid}>
-                    <Pressable
-                      onPress={() => setVehicleId(null)}
-                      style={[modalStyles.vehicleChip, vehicleId === null && modalStyles.vehicleChipActive]}
-                    >
-                      <Text style={[modalStyles.vehicleChipText, vehicleId === null && modalStyles.vehicleChipTextActive]}>
-                        Belirtme
-                      </Text>
-                    </Pressable>
                     {vehicles.map((v) => (
                       <Pressable
                         key={v.id}
@@ -524,6 +538,11 @@ function OfferModal({
                       </Pressable>
                     ))}
                   </View>
+                  {!vehicleId && (
+                    <Text style={modalStyles.vehicleHint}>
+                      Hangi araçla hizmet vereceğini seç — veli bu bilgiyi görecek
+                    </Text>
+                  )}
                 </>
               )}
 
@@ -614,6 +633,23 @@ const modalStyles = StyleSheet.create({
   },
   vehicleChipText: { fontSize: 15, fontWeight: '700', color: colors.dark },
   vehicleChipTextActive: { color: colors.dark },
+  vehicleWarn: {
+    padding: 14,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    marginBottom: 12,
+  },
+  vehicleWarnTitle: { fontSize: 14, fontWeight: '800', color: '#78350F' },
+  vehicleWarnHint: { fontSize: 12, color: '#78350F', marginTop: 4, lineHeight: 18 },
+  vehicleHint: {
+    fontSize: 11,
+    color: colors.warning,
+    fontStyle: 'italic',
+    marginTop: -6,
+    marginBottom: 12,
+  },
   hint: {
     fontSize: 15,
     color: colors.muted,
@@ -899,4 +935,34 @@ const statsStyles = StyleSheet.create({
   firstOfferEmoji: { fontSize: 32, marginBottom: 4 },
   firstOfferTitle: { fontSize: 14, fontWeight: '800' as const, color: '#1E3A8A', marginBottom: 4 },
   firstOfferHint: { fontSize: 11, color: '#1E40AF', textAlign: 'center' as const, lineHeight: 16 },
+  suggestBox: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#BFDBFE',
+    alignItems: 'center' as const,
+    alignSelf: 'stretch' as const,
+  },
+  suggestLabel: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#1E3A8A',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.6,
+    marginBottom: 4,
+  },
+  suggestRange: {
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: '#1E3A8A',
+    letterSpacing: -0.4,
+    marginBottom: 6,
+  },
+  suggestHint: {
+    fontSize: 11,
+    color: '#1E40AF',
+    textAlign: 'center' as const,
+    lineHeight: 16,
+    paddingHorizontal: 4,
+  },
 });

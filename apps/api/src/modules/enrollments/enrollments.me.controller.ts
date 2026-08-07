@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -25,6 +26,11 @@ class UpdateDto {
 class PaymentStatusDto {
   @IsIn(['paid', 'pending', 'cancelled']) status!: 'paid' | 'pending' | 'cancelled';
   @IsOptional() @IsString() @MaxLength(500) providerNote?: string;
+}
+
+class MarkAbsentDto {
+  @IsOptional() @IsIn(['morning', 'evening', 'both']) session?: 'morning' | 'evening' | 'both';
+  @IsOptional() @IsString() @MaxLength(200) reason?: string;
 }
 
 @UseGuards(ProviderJwtStrategy)
@@ -66,6 +72,27 @@ export class EnrollmentsMeController {
   @Post(':id/resume')
   resume(@Req() req: ProviderRequest, @Param('id') id: string) {
     return this.svc.setStatus(req.provider.id, id, 'active');
+  }
+
+  // Servisçi: "Bugün gelmeyecek" işareti (mobil Servis Başlat toggle'ı ile çağrılır)
+  @Post(':id/absent-today')
+  markAbsent(
+    @Req() req: ProviderRequest,
+    @Param('id') id: string,
+    @Body() dto: MarkAbsentDto,
+  ) {
+    return this.svc.markEnrollmentAbsentToday(
+      req.provider.id,
+      id,
+      dto.session ?? 'both',
+      dto.reason,
+    );
+  }
+
+  // Servisçi: "Bugün gelmeyecek" işaretini geri al (o günkü tüm absence'ları siler)
+  @Delete(':id/absent-today')
+  unmarkAbsent(@Req() req: ProviderRequest, @Param('id') id: string) {
+    return this.svc.unmarkEnrollmentAbsentToday(req.provider.id, id);
   }
 }
 

@@ -102,20 +102,29 @@ export default function ServisciAnaSayfa() {
             </View>
           </View>
 
-          {/* KPI row */}
+          {/* KPI row — hepsi tıklanabilir, ilgili ekrana gider */}
           <View style={styles.kpiRow}>
-            <View style={styles.kpiCard}>
+            <Pressable
+              onPress={() => router.push('/(app)/servisci/talepler')}
+              style={({ pressed }) => [styles.kpiCard, pressed && { opacity: 0.75 }]}
+            >
               <Text style={styles.kpiNum}>{dashboard?.newRequestsToday ?? '—'}</Text>
               <Text style={styles.kpiLabel}>Bugün Talep</Text>
-            </View>
-            <View style={styles.kpiCard}>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(app)/servisci/tekliflerim')}
+              style={({ pressed }) => [styles.kpiCard, pressed && { opacity: 0.75 }]}
+            >
               <Text style={styles.kpiNum}>{dashboard?.pendingOffers ?? '—'}</Text>
               <Text style={styles.kpiLabel}>Bekleyen Teklif</Text>
-            </View>
-            <View style={styles.kpiCard}>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/(app)/servisci/tekliflerim')}
+              style={({ pressed }) => [styles.kpiCard, pressed && { opacity: 0.75 }]}
+            >
               <Text style={styles.kpiNum}>{dashboard?.wonOffers ?? '—'}</Text>
               <Text style={styles.kpiLabel}>Kazandığım</Text>
-            </View>
+            </Pressable>
           </View>
         </SafeAreaView>
       </LinearGradient>

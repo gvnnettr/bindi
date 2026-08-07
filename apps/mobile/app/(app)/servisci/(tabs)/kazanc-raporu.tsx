@@ -36,8 +36,18 @@ interface PaymentItem {
 const MONTHS_TR = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
 
 function periodLabel(period: string): string {
-  const [, m] = period.split('-').map(Number);
-  return MONTHS_TR[(m ?? 1) - 1];
+  const [y, m] = period.split('-').map(Number);
+  return `${MONTHS_TR[(m ?? 1) - 1]} ${y}`;
+}
+
+// 2026-08 formatındaki period'u bugünden itibaren N ay içinde mi kontrol et
+function periodWithinMonthsAhead(period: string, maxMonthsAhead: number): boolean {
+  const [py, pm] = period.split('-').map(Number);
+  if (!py || !pm) return false;
+  const now = new Date();
+  const currentAbs = now.getFullYear() * 12 + (now.getMonth() + 1);
+  const periodAbs = py * 12 + pm;
+  return periodAbs <= currentAbs + maxMonthsAhead;
 }
 
 export default function KazancRaporuScreen() {
@@ -55,6 +65,7 @@ function KazancContent() {
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [reviewingPayment, setReviewingPayment] = useState<PaymentItem | null>(null);
+  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -232,32 +243,88 @@ function KazancContent() {
             </>
           )}
 
-          {pendingPayments.length > 0 && (
-            <>
-              <Text style={styles.sectionTitle}>Bekleyen Ödemeler ({pendingPayments.length})</Text>
-              {pendingPayments.map((p) => (
-                <View key={p.id} style={styles.reminderCard}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.reminderParent}>{p.parent.name} · {p.student.name}</Text>
-                    <Text style={styles.reminderPeriod}>{p.period} dönemi · ₺{p.amount.toLocaleString('tr-TR')}</Text>
-                  </View>
-                  <Pressable
-                    onPress={() => Alert.alert(
-                      'Ödeme hatırlatması',
-                      `${p.parent.name} adlı veliye ${p.period} dönemi ödemesi için SMS + bildirim gönderilsin mi?`,
-                      [
-                        { text: 'Vazgeç', style: 'cancel' },
-                        { text: 'Gönder', onPress: () => remindPayment(p) },
-                      ],
-                    )}
-                    style={styles.remindBtn}
-                  >
-                    <Text style={styles.remindBtnText}>⏰ Hatırlat</Text>
-                  </Pressable>
+          {pendingPayments.length > 0 && (() => {
+            // Öğrenci bazlı gruplama + max +2 ay ileri filtre
+            const visiblePayments = pendingPayments
+              .filter((p) => periodWithinMonthsAhead(p.period, 2))
+              .sort((a, b) => a.period.localeCompare(b.period));
+            const groups = new Map<string, { student: PaymentItem['student']; parent: PaymentItem['parent']; items: PaymentItem[]; total: number }>();
+            for (const p of visiblePayments) {
+              const key = p.student.id;
+              const g = groups.get(key) ?? { student: p.student, parent: p.parent, items: [], total: 0 };
+              g.items.push(p);
+              g.total += Number(p.amount);
+              groups.set(key, g);
+            }
+            const groupList = Array.from(groups.values()).sort((a, b) => a.student.name.localeCompare(b.student.name, 'tr'));
+            const totalHidden = pendingPayments.length - visiblePayments.length;
+
+            return (
+              <>
+                <View style={styles.groupHeaderRow}>
+                  <Text style={styles.sectionTitle}>
+                    Bekleyen Ödemeler · {groupList.length} öğrenci
+                  </Text>
+                  <Text style={styles.groupHint}>Bu ay + 2 ay</Text>
                 </View>
-              ))}
-            </>
-          )}
+                {groupList.map((g) => {
+                  const isExpanded = expandedStudent === g.student.id;
+                  return (
+                    <View key={g.student.id} style={styles.studentGroupCard}>
+                      <Pressable
+                        onPress={() => setExpandedStudent(isExpanded ? null : g.student.id)}
+                        style={styles.studentGroupHeader}
+                      >
+                        <View style={styles.studentAvatarSm}>
+                          <Text style={styles.studentAvatarText}>{g.student.name.charAt(0).toUpperCase()}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.studentGroupName}>{g.student.name}</Text>
+                          <Text style={styles.studentGroupSub}>
+                            {g.parent.name} · {g.items.length} dönem
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.studentGroupTotal}>₺{g.total.toLocaleString('tr-TR')}</Text>
+                          <Text style={styles.studentGroupChev}>{isExpanded ? '▲' : '▼'}</Text>
+                        </View>
+                      </Pressable>
+                      {isExpanded && (
+                        <View style={styles.paymentDetailList}>
+                          {g.items.map((p) => (
+                            <View key={p.id} style={styles.paymentDetailRow}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.paymentDetailPeriod}>{periodLabel(p.period)}</Text>
+                                <Text style={styles.paymentDetailAmount}>₺{Number(p.amount).toLocaleString('tr-TR')}</Text>
+                              </View>
+                              <Pressable
+                                onPress={() => Alert.alert(
+                                  'Ödeme hatırlatması',
+                                  `${p.parent.name} adlı veliye ${periodLabel(p.period)} dönemi ödemesi için SMS + bildirim gönderilsin mi?`,
+                                  [
+                                    { text: 'Vazgeç', style: 'cancel' },
+                                    { text: 'Gönder', onPress: () => remindPayment(p) },
+                                  ],
+                                )}
+                                style={styles.remindBtnSm}
+                              >
+                                <Text style={styles.remindBtnSmText}>⏰ Hatırlat</Text>
+                              </Pressable>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+                {totalHidden > 0 && (
+                  <Text style={styles.hiddenHint}>
+                    {totalHidden} ödeme daha var (2 aydan sonrası) · sonraki aylarda otomatik gösterilecek
+                  </Text>
+                )}
+              </>
+            );
+          })()}
 
           {data ? (
             <>
@@ -578,6 +645,81 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark,
   },
   remindBtnText: { color: '#fff', fontWeight: '800', fontSize: 12 },
+
+  // --- Öğrenci-grup kartı ---
+  groupHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  groupHint: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  studentGroupCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  studentGroupHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+  },
+  studentAvatarSm: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  studentAvatarText: { fontSize: 14, fontWeight: '800', color: colors.dark },
+  studentGroupName: { fontSize: 14, fontWeight: '800', color: colors.dark },
+  studentGroupSub: { fontSize: 11, color: colors.muted, marginTop: 2 },
+  studentGroupTotal: { fontSize: 15, fontWeight: '800', color: colors.dark, letterSpacing: -0.3 },
+  studentGroupChev: { fontSize: 10, color: colors.muted, marginTop: 2, fontWeight: '700' },
+  paymentDetailList: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.bg,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  paymentDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  paymentDetailPeriod: { fontSize: 13, fontWeight: '700', color: colors.dark },
+  paymentDetailAmount: { fontSize: 12, color: colors.muted, marginTop: 2, fontWeight: '600' },
+  remindBtnSm: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: colors.dark,
+  },
+  remindBtnSmText: { color: '#fff', fontWeight: '800', fontSize: 11 },
+  hiddenHint: {
+    fontSize: 11,
+    color: colors.muted,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 16,
+    paddingHorizontal: 20,
+  },
 });
 
 const mstyles = StyleSheet.create({
