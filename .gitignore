@@ -19,10 +19,13 @@ apps/mobile/android/
 *.key
 *.mobileprovision
 
-# Firebase secrets
+# Firebase server-side secrets (admin SDK json içeriği hassas — çıkmasın)
 .firebase-admin*.json
-apps/mobile/GoogleService-Info.plist
-apps/mobile/google-services.json
+
+# Not: apps/mobile/GoogleService-Info.plist ve google-services.json commit ediliyor.
+# Bunlar Firebase'in "public client config" dosyaları — API key + project ID içerir,
+# güvenlik Firebase Security Rules ile sağlanır (Firebase resmi dokümantasyonu).
+# EAS build'e girmesi için repo'ya girmesi gerek.
 
 # SSH keys
 *.pem
