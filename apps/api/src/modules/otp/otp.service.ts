@@ -39,35 +39,62 @@ export class OtpService {
     throw new BadRequestException('Geçersiz telefon numarası');
   }
 
+  // Play Store + App Store reviewer'ları için whitelist:
+  // REVIEWER_PHONES env'inde tanımlı numaralara SMS gitmez, static OTP (REVIEWER_STATIC_OTP,
+  // default '000000') kabul edilir. Rate limit de bu numaralar için yok.
+  // Güvenlik: env'i sadece prod'da set et, reviewer sonrası kaldır veya döndür.
+  private isReviewerPhone(normalizedPhone: string): boolean {
+    const raw = process.env.REVIEWER_PHONES;
+    if (!raw) return false;
+    const list = raw
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => {
+        try {
+          return this.normalizePhone(p);
+        } catch {
+          return null;
+        }
+      })
+      .filter((p): p is string => !!p);
+    return list.includes(normalizedPhone);
+  }
+
   async send(
     rawPhone: string,
     purpose: OtpPurpose,
   ): Promise<{ phone: string; testCode?: string }> {
     const phone = this.normalizePhone(rawPhone);
+    const isReviewer = this.isReviewerPhone(phone);
 
-    // Rate limits: son dakikada 1 istek, son saatte 5
-    const oneMinAgo = new Date(Date.now() - 60_000);
-    const oneHourAgo = new Date(Date.now() - 3_600_000);
-    const lastMin = await this.repo.count({
-      where: { phone, purpose, createdAt: MoreThan(oneMinAgo) },
-    });
-    if (lastMin >= 1) {
-      throw new HttpException(
-        'Çok sık istek gönderiyorsunuz, lütfen 1 dakika bekleyin.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
-    const lastHour = await this.repo.count({
-      where: { phone, purpose, createdAt: MoreThan(oneHourAgo) },
-    });
-    if (lastHour >= 5) {
-      throw new HttpException(
-        'Saatlik SMS limitine ulaşıldı, sonra tekrar deneyin.',
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+    // Rate limits reviewer için atlanır — inceleyici hızlı deneyebilmeli
+    if (!isReviewer) {
+      const oneMinAgo = new Date(Date.now() - 60_000);
+      const oneHourAgo = new Date(Date.now() - 3_600_000);
+      const lastMin = await this.repo.count({
+        where: { phone, purpose, createdAt: MoreThan(oneMinAgo) },
+      });
+      if (lastMin >= 1) {
+        throw new HttpException(
+          'Çok sık istek gönderiyorsunuz, lütfen 1 dakika bekleyin.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      const lastHour = await this.repo.count({
+        where: { phone, purpose, createdAt: MoreThan(oneHourAgo) },
+      });
+      if (lastHour >= 5) {
+        throw new HttpException(
+          'Saatlik SMS limitine ulaşıldı, sonra tekrar deneyin.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
     }
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const code = isReviewer
+      ? (process.env.REVIEWER_STATIC_OTP || '000000')
+      : String(Math.floor(100000 + Math.random() * 900000));
     const otp = this.repo.create({
       phone,
       purpose,
@@ -76,8 +103,13 @@ export class OtpService {
     });
     await this.repo.save(otp);
 
-    await this.sms.send(phone, `servis-platform doğrulama kodu: ${code}`);
-    this.logger.log(`OTP sent to ${phone} for ${purpose}`);
+    if (isReviewer) {
+      // SMS gitmez, sabit kod verify'da kabul edilir
+      this.logger.log(`Reviewer whitelist OTP for ${phone} (${purpose}) — SMS skipped, static code accepted`);
+    } else {
+      await this.sms.send(phone, `servis-platform doğrulama kodu: ${code}`);
+      this.logger.log(`OTP sent to ${phone} for ${purpose}`);
+    }
     // Test mod'da kod frontend'e döner (SMS gitmez, ekranda görünür)
     const testMode = await this.sms.isTestMode();
     return testMode ? { phone, testCode: code } : { phone };
