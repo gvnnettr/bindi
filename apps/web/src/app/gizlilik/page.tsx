@@ -16,7 +16,7 @@ export default function GizlilikPage() {
       <section className="mx-auto max-w-4xl px-6 py-16">
         <div className="space-y-6 text-charcoal-700">
           <p className="text-xs text-charcoal-500">
-            Son güncelleme: 21.07.2026
+            Son güncelleme: 16.08.2026
           </p>
 
           <Section title="1. Toplanan Bilgiler">
@@ -34,12 +34,103 @@ export default function GizlilikPage() {
                 sağlık raporu vb.).
               </li>
               <li>
+                <b>Konum verisi (mobil uygulama):</b> yalnızca aktif servis
+                sırasında sürücünün cihazından toplanan hassas ve arka plan
+                konum bilgisi. Detay için 2. bölüme bakın.
+              </li>
+              <li>
                 Otomatik: IP, tarayıcı, ziyaret zamanı, oturum çerezleri.
               </li>
             </ul>
           </Section>
 
-          <Section title="2. Verilerin Kullanım Amaçları">
+          <Section title="2. Konum Verisi (Mobil Uygulama)">
+            <p className="mb-3">
+              Bindi mobil uygulaması, <b>Canlı Servis Takibi</b> özelliği için
+              konum verisi kullanır. Bu bölüm Google Play konum politikası
+              gereği ayrıntılı olarak açıklanmıştır.
+            </p>
+            <p className="mt-3 mb-1"><b>Ne toplanır?</b></p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>
+                <b>Sürücü tarafında:</b> aktif servis sırasında hassas konum
+                (<code>ACCESS_FINE_LOCATION</code>) ve arka plan konumu
+                (<code>ACCESS_BACKGROUND_LOCATION</code>) yaklaşık her 10
+                saniyede bir sunucumuza iletilir.
+              </li>
+              <li>
+                <b>Veli tarafında:</b> konum verisi toplanmaz. Veli yalnızca
+                sürücünün paylaştığı konumu haritada görüntüler.
+              </li>
+            </ul>
+            <p className="mt-3 mb-1"><b>Ne zaman toplanır?</b></p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>
+                Sürücü uygulamada &ldquo;Servisi Başlat&rdquo; butonuna açıkça
+                bastığında başlar. Foreground bildirim gösterilir.
+              </li>
+              <li>
+                Sürücü &ldquo;Servisi Bitir&rdquo; tıkladığında arka plan takibi
+                dahil <b>tamamen</b> durur.
+              </li>
+              <li>
+                Servis dışında (uygulama açık olsa bile) konum takibi yapılmaz.
+              </li>
+            </ul>
+            <p className="mt-3 mb-1"><b>Neden toplanır?</b></p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>
+                Velinin, çocuğunun servisinin nerede olduğunu ve okula/eve ne
+                zaman ulaşacağını gerçek zamanlı görebilmesi için.
+              </li>
+              <li>
+                Servisçinin rota kayıtlarını tutabilmesi ve gerektiğinde geriye
+                dönük kontrol edebilmesi için.
+              </li>
+            </ul>
+            <p className="mt-3 mb-1"><b>Kim erişebilir?</b></p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>
+                Yalnızca ilgili servisin velisi ve konumu paylaşan servisçinin
+                kendisi.
+              </li>
+              <li>
+                Bindi sistem yöneticileri (güvenlik / destek amaçlı, denetim
+                kayıtları üzerinden).
+              </li>
+              <li>
+                Üçüncü taraflara <b>satılmaz</b>, reklam amaçlı{' '}
+                <b>kullanılmaz</b>, üçüncü taraf analiz servislerine{' '}
+                <b>gönderilmez</b>.
+              </li>
+            </ul>
+            <p className="mt-3 mb-1"><b>Ne kadar saklanır?</b></p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>
+                Servis bitiminden <b>24 saat sonra</b> sürücü konum kayıtları
+                kalıcı olarak silinir.
+              </li>
+              <li>
+                Yalnızca &ldquo;servis başladı/bitti&rdquo; olay kaydı denetim
+                için 1 yıl tutulur ve <b>konum içermez</b>.
+              </li>
+            </ul>
+            <p className="mt-3 mb-1"><b>Kontrolünüz</b></p>
+            <ul className="list-disc space-y-1 pl-6">
+              <li>
+                Sürücü her zaman &ldquo;Servisi Bitir&rdquo; ile konum
+                paylaşımını durdurabilir.
+              </li>
+              <li>
+                iOS Ayarlar &rarr; Bindi &rarr; Konum veya Android Ayarlar
+                &rarr; Uygulamalar &rarr; Bindi &rarr; İzinler menüsünden konum
+                iznini istediğiniz zaman geri çekebilirsiniz. Bu durumda canlı
+                takip özelliği çalışmaz ancak diğer özellikler etkilenmez.
+              </li>
+            </ul>
+          </Section>
+
+          <Section title="3. Verilerin Kullanım Amaçları">
             <ul className="list-disc space-y-1 pl-6">
               <li>Hizmetin sunulması ve iyileştirilmesi</li>
               <li>Servisçi–veli eşleştirmesi</li>
@@ -50,7 +141,7 @@ export default function GizlilikPage() {
             </ul>
           </Section>
 
-          <Section title="3. Verilerin Paylaşımı">
+          <Section title="4. Verilerin Paylaşımı">
             Kişisel verileriniz üçüncü kişilerle satılmaz. Yalnızca aşağıdaki
             durumlarda paylaşılır:
             <ul className="mt-2 list-disc space-y-1 pl-6">
@@ -68,14 +159,14 @@ export default function GizlilikPage() {
             </ul>
           </Section>
 
-          <Section title="4. Saklama Süresi">
+          <Section title="5. Saklama Süresi">
             Veriler, hizmetin sunulması için gerekli süre ve yasal saklama
             yükümlülüğü çerçevesinde muhafaza edilir. Kullanıcı hesabı
             silindiğinde ilgili veriler kısa süre içinde anonimleştirilir veya
             imha edilir.
           </Section>
 
-          <Section title="5. Haklarınız (KVKK md. 11)">
+          <Section title="6. Haklarınız (KVKK md. 11)">
             Kişisel verilerinize ilişkin bilgi almak, düzeltmek, silmek veya
             işlemeye itiraz etmek için{' '}
             <a
@@ -91,13 +182,13 @@ export default function GizlilikPage() {
             'ni okuyun.
           </Section>
 
-          <Section title="6. Çerezler">
+          <Section title="7. Çerezler">
             Platformumuzda oturum yönetimi ve tercihlerin hatırlanması için
             zorunlu çerezler kullanılır. İsteğe bağlı analitik/pazarlama çerezi
             kullanılmamaktadır.
           </Section>
 
-          <Section title="7. Değişiklikler">
+          <Section title="8. Değişiklikler">
             Bu politika zaman zaman güncellenebilir. Değişiklikler yayınlandığı
             an itibarıyla geçerlidir.
           </Section>
