@@ -20,11 +20,9 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "UIBackgroundModes": [
-          "remote-notification",
-          "location"
+          "remote-notification"
         ],
         "NSLocationWhenInUseUsageDescription": "Servis başlat ve bitir sırasında velilere canlı konumu göstermek için kullanılır.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Servis boyunca velilere canlı konumu göstermek için kullanılır.",
         "NSPhotoLibraryUsageDescription": "Ödeme dekontunuzu yüklemek için galeriye erişim gereklidir.",
         "NSCameraUsageDescription": "Belge ve dekont fotoğrafı çekmek için kameraya erişim gereklidir."
       }
@@ -41,7 +39,6 @@
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
         "POST_NOTIFICATIONS"
       ],
       "predictiveBackGestureEnabled": false
